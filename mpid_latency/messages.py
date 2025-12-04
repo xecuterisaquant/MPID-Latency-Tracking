@@ -212,3 +212,115 @@ class BrokenTrade:
     match_number: int
     locate: int = 0
     tracking_number: int = 0
+
+
+@dataclass
+class NOII:
+    """Net Order Imbalance Indicator."""
+    timestamp: int
+    paired_shares: int
+    imbalance_shares: int
+    imbalance_direction: str
+    stock: str
+    far_price: int
+    near_price: int
+    current_reference_price: int
+    cross_type: str
+    price_variation_indicator: str
+    locate: int = 0
+    tracking_number: int = 0
+
+    def __post_init__(self) -> None:
+        self.stock = self.stock.strip()
+        self.imbalance_direction = self.imbalance_direction.strip()
+        self.cross_type = self.cross_type.strip()
+        self.price_variation_indicator = self.price_variation_indicator.strip()
+
+
+@dataclass
+class RegSHORestriction:
+    """Reg SHO Short Sale Price Test Restricted Indicator."""
+    timestamp: int
+    stock: str
+    reg_sho_action: str
+    locate: int = 0
+    tracking_number: int = 0
+
+    def __post_init__(self) -> None:
+        self.stock = self.stock.strip()
+        self.reg_sho_action = self.reg_sho_action.strip()
+
+
+@dataclass
+class MarketParticipantPosition:
+    """Market Participant Position."""
+    timestamp: int
+    mpid: str
+    stock: str
+    primary_market_maker: str
+    market_maker_mode: str
+    market_participant_state: str
+    locate: int = 0
+    tracking_number: int = 0
+
+    def __post_init__(self) -> None:
+        self.mpid = self.mpid.strip()
+        self.stock = self.stock.strip()
+        self.primary_market_maker = self.primary_market_maker.strip()
+        self.market_maker_mode = self.market_maker_mode.strip()
+        self.market_participant_state = self.market_participant_state.strip()
+
+
+@dataclass
+class MWCBDeclineLevel:
+    """Market-Wide Circuit Breaker Decline Level Message."""
+    timestamp: int
+    level1: int
+    level2: int
+    level3: int
+    locate: int = 0
+    tracking_number: int = 0
+
+
+@dataclass
+class MWCBStatus:
+    """Market-Wide Circuit Breaker Status Message."""
+    timestamp: int
+    breaker_level: str
+    locate: int = 0
+    tracking_number: int = 0
+
+    def __post_init__(self) -> None:
+        self.breaker_level = self.breaker_level.strip()
+
+
+@dataclass
+class IPOQuotingPeriod:
+    """IPO Quoting Period Update."""
+    timestamp: int
+    stock: str
+    ipo_quotation_release_time: int
+    ipo_quotation_release_qualifier: str
+    ipo_price: int
+    locate: int = 0
+    tracking_number: int = 0
+
+    def __post_init__(self) -> None:
+        self.stock = self.stock.strip()
+        self.ipo_quotation_release_qualifier = self.ipo_quotation_release_qualifier.strip()
+
+
+@dataclass
+class LULDAuctionCollar:
+    """LULD Auction Collar."""
+    timestamp: int
+    stock: str
+    auction_collar_reference_price: int
+    upper_auction_collar_price: int
+    lower_auction_collar_price: int
+    auction_collar_extension: int
+    locate: int = 0
+    tracking_number: int = 0
+
+    def __post_init__(self) -> None:
+        self.stock = self.stock.strip()

@@ -242,6 +242,137 @@ def _decode_broken_trade(body: bytes) -> messages.BrokenTrade:
     )
 
 
+def _decode_noii(body: bytes) -> messages.NOII:
+    (
+        locate,
+        track_num,
+        ts,
+        paired_shares,
+        imbalance_shares,
+        imbalance_direction,
+        stock,
+        far_price,
+        near_price,
+        current_reference_price,
+        cross_type,
+        price_variation_indicator,
+    ) = struct.unpack(">HH6sQQc8sIIIcc", body)
+    return messages.NOII(
+        timestamp=_byte_to_int(ts),
+        paired_shares=paired_shares,
+        imbalance_shares=imbalance_shares,
+        imbalance_direction=_byte_to_str(imbalance_direction),
+        stock=_byte_to_str(stock),
+        far_price=far_price,
+        near_price=near_price,
+        current_reference_price=current_reference_price,
+        cross_type=_byte_to_str(cross_type),
+        price_variation_indicator=_byte_to_str(price_variation_indicator),
+        locate=locate,
+        tracking_number=track_num,
+    )
+
+
+def _decode_reg_sho_restriction(body: bytes) -> messages.RegSHORestriction:
+    locate, track_num, ts, stock, reg_sho_action = struct.unpack(">HH6s8sc", body)
+    return messages.RegSHORestriction(
+        timestamp=_byte_to_int(ts),
+        stock=_byte_to_str(stock),
+        reg_sho_action=_byte_to_str(reg_sho_action),
+        locate=locate,
+        tracking_number=track_num,
+    )
+
+
+def _decode_market_participant_position(body: bytes) -> messages.MarketParticipantPosition:
+    (
+        locate,
+        track_num,
+        ts,
+        mpid,
+        stock,
+        primary_market_maker,
+        market_maker_mode,
+        market_participant_state,
+    ) = struct.unpack(">HH6s4s8sccc", body)
+    return messages.MarketParticipantPosition(
+        timestamp=_byte_to_int(ts),
+        mpid=_byte_to_str(mpid),
+        stock=_byte_to_str(stock),
+        primary_market_maker=_byte_to_str(primary_market_maker),
+        market_maker_mode=_byte_to_str(market_maker_mode),
+        market_participant_state=_byte_to_str(market_participant_state),
+        locate=locate,
+        tracking_number=track_num,
+    )
+
+
+def _decode_mwcb_decline_level(body: bytes) -> messages.MWCBDeclineLevel:
+    locate, track_num, ts, level1, level2, level3 = struct.unpack(">HH6sQQQ", body)
+    return messages.MWCBDeclineLevel(
+        timestamp=_byte_to_int(ts),
+        level1=level1,
+        level2=level2,
+        level3=level3,
+        locate=locate,
+        tracking_number=track_num,
+    )
+
+
+def _decode_mwcb_status(body: bytes) -> messages.MWCBStatus:
+    locate, track_num, ts, breaker_level = struct.unpack(">HH6sc", body)
+    return messages.MWCBStatus(
+        timestamp=_byte_to_int(ts),
+        breaker_level=_byte_to_str(breaker_level),
+        locate=locate,
+        tracking_number=track_num,
+    )
+
+
+def _decode_ipo_quoting_period(body: bytes) -> messages.IPOQuotingPeriod:
+    (
+        locate,
+        track_num,
+        ts,
+        stock,
+        ipo_quotation_release_time,
+        ipo_quotation_release_qualifier,
+        ipo_price,
+    ) = struct.unpack(">HH6s8sIcI", body)
+    return messages.IPOQuotingPeriod(
+        timestamp=_byte_to_int(ts),
+        stock=_byte_to_str(stock),
+        ipo_quotation_release_time=ipo_quotation_release_time,
+        ipo_quotation_release_qualifier=_byte_to_str(ipo_quotation_release_qualifier),
+        ipo_price=ipo_price,
+        locate=locate,
+        tracking_number=track_num,
+    )
+
+
+def _decode_luld_auction_collar(body: bytes) -> messages.LULDAuctionCollar:
+    (
+        locate,
+        track_num,
+        ts,
+        stock,
+        auction_collar_reference_price,
+        upper_auction_collar_price,
+        lower_auction_collar_price,
+        auction_collar_extension,
+    ) = struct.unpack(">HH6s8sIIII", body)
+    return messages.LULDAuctionCollar(
+        timestamp=_byte_to_int(ts),
+        stock=_byte_to_str(stock),
+        auction_collar_reference_price=auction_collar_reference_price,
+        upper_auction_collar_price=upper_auction_collar_price,
+        lower_auction_collar_price=lower_auction_collar_price,
+        auction_collar_extension=auction_collar_extension,
+        locate=locate,
+        tracking_number=track_num,
+    )
+
+
 _DECODERS: Dict[bytes, _MessageDecoder] = {
     b"S": (14, _decode_system_event),
     b"R": (41, _decode_stock_directory),
@@ -256,6 +387,13 @@ _DECODERS: Dict[bytes, _MessageDecoder] = {
     b"P": (46, _decode_trade),
     b"Q": (42, _decode_cross),
     b"B": (21, _decode_broken_trade),
+    b"I": (52, _decode_noii),
+    b"Y": (22, _decode_reg_sho_restriction),
+    b"L": (27, _decode_market_participant_position),
+    b"V": (37, _decode_mwcb_decline_level),
+    b"W": (14, _decode_mwcb_status),
+    b"K": (30, _decode_ipo_quoting_period),
+    b"J": (37, _decode_luld_auction_collar),
 }
 
 
