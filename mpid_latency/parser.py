@@ -389,7 +389,7 @@ _DECODERS: Dict[bytes, _MessageDecoder] = {
     b"B": (21, _decode_broken_trade),
     b"I": (52, _decode_noii),
     b"Y": (22, _decode_reg_sho_restriction),
-    b"L": (27, _decode_market_participant_position),
+    b"L": (28, _decode_market_participant_position),
     b"V": (37, _decode_mwcb_decline_level),
     b"W": (14, _decode_mwcb_status),
     b"K": (30, _decode_ipo_quoting_period),
