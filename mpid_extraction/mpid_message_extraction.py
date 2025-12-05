@@ -8,6 +8,7 @@ from mpid_latency.messages import AddOrderMPID
 def process_pcap_to_parquet(pcap_path, output_path):
     """
     Create temporary ITCH file, parse it, then delete.
+    Returns tuple of (extracted_count, total_count).
     """
     pcap_path = Path(pcap_path)
     output_path = Path(output_path)
@@ -21,7 +22,9 @@ def process_pcap_to_parquet(pcap_path, output_path):
         
         # Parse and filter (happens once)
         messages = []
+        total_messages = 0
         for msg in ITCHReader(str(itch_temp)):
+            total_messages += 1
             if isinstance(msg, AddOrderMPID):
                 messages.append({
                     'locate': msg.locate,
@@ -40,7 +43,7 @@ def process_pcap_to_parquet(pcap_path, output_path):
         pq.write_table(table, output_path, compression='zstd', compression_level=9)
         
         print(f"Saved {len(messages)} AddOrderMPID messages to {output_path.name}")
-        return len(messages)
+        return len(messages), total_messages
         
     finally:
         # Always clean up temp file
