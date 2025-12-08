@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Bash script to process pcap files in nested directory structure
-# Usage: ./mpid_message_extraction.sh <input_dir> <output_dir> <message_types>
+# Usage: ./message_extraction.sh <input_dir> <output_dir> <message_types>
 
 # Show help message
 if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
@@ -162,6 +162,8 @@ for day_dir in "$INPUT_DIR"/*; do
         # Decompress if needed
         if [ "$needs_cleanup" = true ]; then
             echo "  [DECOMP] $filename.pcap.zst"
+            # Remove any existing temp file first
+            rm -f "$temp_pcap"
             unzstd -d "$pcap_file" -o "$temp_pcap" --quiet
             if [ $? -ne 0 ]; then
                 echo "  [ERROR]  Failed to decompress"
