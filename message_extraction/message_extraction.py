@@ -1,8 +1,9 @@
 from pathlib import Path
 from collections import Counter
+import io
 import pyarrow as pa
 import pyarrow.parquet as pq
-from mpid_latency.ingest import write_itch_stream_from_pcap
+from mpid_latency.ingest import iter_filtered_itch_messages_from_pcap
 from mpid_latency.parser import ITCHReader
 from mpid_latency import messages
 
@@ -36,12 +37,12 @@ def get_message_types_from_codes(codes):
 
 def process_pcap_to_parquet(pcap_path, output_path, message_type_codes):
     """
-    Create temporary ITCH file, parse it, filter by message types, then delete temp file.
+    Parse pcap and filter by message types at byte level (fast pre-filtering).
     
     Args:
         pcap_path: Path to input pcap file
         output_path: Path to output parquet file
-        message_type_codes: List of ITCH spec letter codes (e.g., ['F', 'L', 'E'])
+        message_type_codes: List of ITCH spec letter codes (e.g., ['F', 'L'])
     
     Returns:
         tuple of (message_counts_dict, total_count)
@@ -56,58 +57,54 @@ def process_pcap_to_parquet(pcap_path, output_path, message_type_codes):
     # Create output directory if needed
     output_path.parent.mkdir(parents=True, exist_ok=True)
     
-    # Temporary ITCH file (will be deleted)
-    itch_temp = pcap_path.parent / f".temp_{pcap_path.stem}.bin"
+    extracted_messages = []
+    message_counts = Counter()
+    total_messages = 0
     
-    try:
-        # Extract ITCH from pcap (happens once)
-        write_itch_stream_from_pcap(pcap_path, itch_temp)
+    # Use filtered iterator - only extracts requested message types at byte level (FAST!)
+    # This skips parsing/unpacking all other message types
+    itch_buffer = io.BytesIO()
+    for msg_bytes in iter_filtered_itch_messages_from_pcap(pcap_path, set(message_type_codes)):
+        itch_buffer.write(msg_bytes)
+    
+    # Reset buffer position to start
+    itch_buffer.seek(0)
+    
+    # Get field names once (avoid repeated introspection)
+    fields_cache = {}
+    
+    # Now ITCHReader only parses the pre-filtered messages
+    for msg in ITCHReader(itch_buffer):
+        total_messages += 1
         
-        # Parse and filter (happens once)
-        extracted_messages = []
-        message_counts = Counter()
-        total_messages = 0
+        # Messages are already filtered at byte level, so all should match
+        msg_type = type(msg)
+        msg_type_name = msg_type.__name__
+        message_counts[msg_type_name] += 1
         
-        for msg in ITCHReader(str(itch_temp)):
-            total_messages += 1
-            
-            # Check if message is one of the requested types
-            if isinstance(msg, message_types):
-                msg_type_name = type(msg).__name__
-                message_counts[msg_type_name] += 1
-                
-                # Build dict with common fields
-                msg_dict = {
-                    'message_type': msg_type_name,
-                    'locate': msg.locate,
-                    'tracking_number': msg.tracking_number,
-                    'timestamp': msg.timestamp,
-                }
-                
-                # Add all remaining fields from the message
-                for field in msg.__dataclass_fields__:
-                    if field not in msg_dict:
-                        value = getattr(msg, field)
-                        # Convert enums to string values
-                        if hasattr(value, 'value'):
-                            value = value.value
-                        msg_dict[field] = value
-                
-                extracted_messages.append(msg_dict)
+        # Cache field names per message type
+        if msg_type not in fields_cache:
+            fields_cache[msg_type] = tuple(msg.__dataclass_fields__.keys())
         
-        # Check if we found any messages
-        if not extracted_messages:
-            # Return empty counts for all requested types
-            empty_counts = {ITCH_MESSAGE_MAP[code].__name__: 0 for code in message_type_codes}
-            return empty_counts, total_messages
-        
-        # Save to compressed Parquet
-        table = pa.Table.from_pylist(extracted_messages)
-        pq.write_table(table, output_path, compression='zstd', compression_level=9)
-        
-        return dict(message_counts), total_messages
-        
-    finally:
-        # Always clean up temp file
-        itch_temp.unlink(missing_ok=True)
+        # Extract fields and convert enums to strings
+        msg_dict = {}
+        for field in fields_cache[msg_type]:
+            value = getattr(msg, field)
+            # Convert enums to their string values
+            if hasattr(value, 'value'):
+                value = value.value
+            msg_dict[field] = value
+        extracted_messages.append(msg_dict)
+    
+    # Check if we found any messages
+    if not extracted_messages:
+        # Return empty counts for all requested types
+        empty_counts = {ITCH_MESSAGE_MAP[code].__name__: 0 for code in message_type_codes}
+        return empty_counts, total_messages
+    
+    # Save to compressed Parquet (compression level 3 for speed)
+    table = pa.Table.from_pylist(extracted_messages)
+    pq.write_table(table, output_path, compression='zstd', compression_level=3)
+    
+    return dict(message_counts), total_messages
 
