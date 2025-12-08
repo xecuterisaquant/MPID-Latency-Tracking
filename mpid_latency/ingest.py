@@ -51,6 +51,49 @@ def iter_itch_messages_from_pcap(source: str | Path | BinaryIO) -> Iterator[byte
 				yield msg_type + length_value.to_bytes(2, "big") + body
 
 
+def iter_filtered_itch_messages_from_pcap(
+	source: str | Path | BinaryIO, 
+	message_type_codes: set[str] | None = None
+) -> Iterator[bytes]:
+	"""Yield only ITCH messages matching the specified type codes.
+	
+	This is significantly faster than parsing all messages when you only need
+	a subset, as it filters at the byte level before struct unpacking.
+	
+	Args:
+		source: Pcap file path or file-like object
+		message_type_codes: Set of single-character ITCH type codes (e.g., {'F', 'L'})
+			If None, yields all messages (same as iter_itch_messages_from_pcap)
+	
+	Yields:
+		ITCH message bytes ready for ITCHReader, filtered by type
+	"""
+	if message_type_codes is None:
+		# No filtering - pass through all messages
+		yield from iter_itch_messages_from_pcap(source)
+		return
+	
+	# Convert to bytes for fast comparison
+	type_codes_bytes = {code.encode('ascii') for code in message_type_codes}
+	
+	with _open_binary_stream(source) as fh:
+		endianness = _read_pcap_global_header(fh)
+		for payload in _iter_udp_payloads(fh, endianness):
+			for message in _iter_mold_messages(payload):
+				if not message:
+					continue
+				
+				msg_type = message[:1]
+				
+				# Fast byte-level filter - skip unwanted types
+				if msg_type not in type_codes_bytes:
+					continue
+				
+				body = message[1:]
+				length_value = len(body) + 3
+				yield msg_type + length_value.to_bytes(2, "big") + body
+
+
 def write_itch_stream_from_pcap(
 	source: str | Path | BinaryIO, destination: str | Path
 ) -> Path:
