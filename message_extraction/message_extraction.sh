@@ -1,16 +1,18 @@
 #!/bin/bash
 
 # Bash script to process pcap files in nested directory structure
-# Usage: ./message_extraction.sh <input_dir> <output_dir> <message_types>
+# Usage: ./message_extraction.sh <input_dir> <output_dir> <message_types...> [--start-date YYYYMMDD] [--end-date YYYYMMDD]
 
 # Show help message
 if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
-    echo "Usage: $0 <input_pcap_dir> <output_parquet_dir> <message_type_codes>"
+    echo "Usage: $0 <input_pcap_dir> <output_parquet_dir> <message_type_codes...> [--start-date YYYYMMDD] [--end-date YYYYMMDD]"
     echo ""
     echo "Arguments:"
     echo "  input_pcap_dir      Directory containing subdirectories with .pcap or .pcap.zst files"
     echo "  output_parquet_dir  Directory where output .parquet files will be saved"
     echo "  message_type_codes  ITCH message type codes to extract (space-separated)"
+    echo "  --start-date YYYYMMDD   (optional) only process subdirectories >= start date"
+    echo "  --end-date   YYYYMMDD   (optional) only process subdirectories <= end date"
     echo ""
     echo "Available ITCH Message Types:"
     echo "  S - SystemEvent"
@@ -35,16 +37,16 @@ if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
     echo "  J - LULDAuctionCollar"
     echo ""
     echo "Examples:"
-    echo "  $0 /data/pcaps /data/output F              # Extract only AddOrderMPID"
-    echo "  $0 /data/pcaps /data/output F L E          # Extract AddOrderMPID, MarketParticipantPosition, Execute"
-    echo "  $0 /data/pcaps /data/output A F E C        # Extract AddOrder, AddOrderMPID, Execute, ExecuteWithPrice"
+    echo "  $0 /data/pcaps /data/output F                        # Extract only AddOrderMPID"
+    echo "  $0 /data/pcaps /data/output F L E                  # Extract AddOrderMPID, MarketParticipantPosition, Execute"
+    echo "  $0 /data/pcaps /data/output F X D U --start-date 20250201 --end-date 20250205"
     exit 0
 fi
 
 # Check arguments
 if [ "$#" -lt 3 ]; then
     echo "Error: Insufficient arguments"
-    echo "Usage: $0 <input_pcap_dir> <output_parquet_dir> <message_type_codes>"
+    echo "Usage: $0 <input_pcap_dir> <output_parquet_dir> <message_type_codes...> [--start-date YYYYMMDD] [--end-date YYYYMMDD]"
     echo "Example: $0 /path/to/pcap/data /path/to/parquet/output F L E"
     echo "Run '$0 --help' for more information"
     exit 1
@@ -53,7 +55,73 @@ fi
 INPUT_DIR="$1"
 OUTPUT_DIR="$2"
 shift 2
-MESSAGE_TYPES="$@"
+
+START_DATE=""
+END_DATE=""
+declare -a MESSAGE_TYPES=()
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --start-date=*)
+            START_DATE="${1#*=}"
+            shift
+            ;;
+        --start-date|-s)
+            START_DATE="$2"
+            shift 2
+            ;;
+        --end-date=*)
+            END_DATE="${1#*=}"
+            shift
+            ;;
+        --end-date|-e)
+            END_DATE="$2"
+            shift 2
+            ;;
+        --help|-h)
+            exec "$0" --help
+            ;;
+        *)
+            MESSAGE_TYPES+=("$1")
+            shift
+            ;;
+    esac
+done
+
+if [ ${#MESSAGE_TYPES[@]} -eq 0 ]; then
+    echo "Error: No message type codes provided"
+    exit 1
+fi
+
+validate_date() {
+    local value="$1"
+    [[ -z "$value" ]] && return 0
+    if [[ ! "$value" =~ ^[0-9]{8}$ ]]; then
+        echo "Error: Date must be in YYYYMMDD format: $value"
+        exit 1
+    fi
+}
+
+validate_date "$START_DATE"
+validate_date "$END_DATE"
+
+if [[ -n "$START_DATE" && -n "$END_DATE" && "$START_DATE" > "$END_DATE" ]]; then
+    echo "Error: --start-date cannot be after --end-date"
+    exit 1
+fi
+
+should_process_day() {
+    local day="$1"
+    if [[ -n "$START_DATE" && "$day" < "$START_DATE" ]]; then
+        return 1
+    fi
+    if [[ -n "$END_DATE" && "$day" > "$END_DATE" ]]; then
+        return 1
+    fi
+    return 0
+}
+
+MESSAGE_TYPES_STR="${MESSAGE_TYPES[*]}"
 
 # Validate input directory exists
 if [ ! -d "$INPUT_DIR" ]; then
@@ -91,7 +159,10 @@ echo "MPID Message Extraction - Batch Processing"
 echo "============================================"
 echo "Input directory:  $INPUT_DIR"
 echo "Output directory: $OUTPUT_DIR"
-echo "Message types:    $MESSAGE_TYPES"
+echo "Message types:    $MESSAGE_TYPES_STR"
+if [ -n "$START_DATE" ] || [ -n "$END_DATE" ]; then
+    echo "Date filter:      ${START_DATE:-*} to ${END_DATE:-*}"
+fi
 echo "Python script:    $PYTHON_SCRIPT"
 echo "============================================"
 echo ""
@@ -103,8 +174,18 @@ for day_dir in "$INPUT_DIR"/*; do
         continue
     fi
     
-    # Get the day directory name (e.g., "2025-02-03")
+    # Get the day directory name (e.g., "20250203")
     day_name=$(basename "$day_dir")
+
+    if [[ -n "$START_DATE" || -n "$END_DATE" ]]; then
+        if [[ ! "$day_name" =~ ^[0-9]{8}$ ]]; then
+            echo "[SKIP] Directory name is not YYYYMMDD: $day_name"
+            continue
+        fi
+        if ! should_process_day "$day_name"; then
+            continue
+        fi
+    fi
     
     # Check if directory is empty
     if [ -z "$(ls -A "$day_dir"/*.pcap "$day_dir"/*.pcap.zst 2>/dev/null)" ]; then
@@ -134,7 +215,7 @@ for day_dir in "$INPUT_DIR"/*; do
         filename="${filename%.pcap}"
         
         # Create message type suffix (sorted for consistency)
-        msg_type_suffix=$(echo "$MESSAGE_TYPES" | tr ' ' '\n' | sort | tr '\n' '-' | sed 's/-$//' | tr -d '\n')
+        msg_type_suffix=$(printf '%s\n' "${MESSAGE_TYPES[@]}" | sort | tr '\n' '-' | sed 's/-$//' | tr -d '\n')
         
         # Construct output parquet path with message types encoded in filename
         output_file="$output_day_dir/${filename}_${msg_type_suffix}.parquet"
@@ -190,7 +271,7 @@ sys.path.insert(0, '$PROJECT_ROOT')
 from message_extraction.message_extraction import process_pcap_to_parquet
 
 try:
-    counts, rows_written, total = process_pcap_to_parquet('$actual_pcap', '$output_file', '$MESSAGE_TYPES'.split())
+    counts, rows_written, total = process_pcap_to_parquet('$actual_pcap', '$output_file', '$MESSAGE_TYPES_STR'.split())
     # Output format: counts_json|rows_written|total
     print(json.dumps(counts) + '|' + str(rows_written) + '|' + str(total))
     sys.exit(0)
@@ -210,7 +291,7 @@ except Exception as e:
             # Parse individual message type counts and build display string
             count_display=""
             total_extracted=0
-            for msg_type in $MESSAGE_TYPES; do
+            for msg_type in "${MESSAGE_TYPES[@]}"; do
                 # Map ITCH code to class name
                 case $msg_type in
                     S) class_name="SystemEvent" ;;
@@ -291,7 +372,7 @@ echo "Successfully processed:  $processed_files"
 echo "Failed:                  $failed_files"
 echo ""
 echo "Messages extracted by type:"
-for msg_type in $MESSAGE_TYPES; do
+for msg_type in "${MESSAGE_TYPES[@]}"; do
     # Map code to readable name for display
     case $msg_type in
         S) type_name="SystemEvent" ;;
