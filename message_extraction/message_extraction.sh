@@ -81,7 +81,7 @@ fi
 total_files=0
 processed_files=0
 failed_files=0
-total_messages_parsed=0
+total_rows_written=0
 
 # Track message counts (will be built as we go)
 message_counts_data=""
@@ -190,9 +190,9 @@ sys.path.insert(0, '$PROJECT_ROOT')
 from message_extraction.message_extraction import process_pcap_to_parquet
 
 try:
-    counts, total = process_pcap_to_parquet('$actual_pcap', '$output_file', '$MESSAGE_TYPES'.split())
-    # Output format: counts_json|total
-    print(json.dumps(counts) + '|' + str(total))
+    counts, rows_written, total = process_pcap_to_parquet('$actual_pcap', '$output_file', '$MESSAGE_TYPES'.split())
+    # Output format: counts_json|rows_written|total
+    print(json.dumps(counts) + '|' + str(rows_written) + '|' + str(total))
     sys.exit(0)
 except Exception as e:
     print(f'ERROR: {str(e)}', file=sys.stderr)
@@ -202,8 +202,10 @@ except Exception as e:
         # Check exit status
         if [ $? -eq 0 ]; then
             # Parse the output (format: {"MessageType": count, ...}|total)
-            counts_json=$(echo "$output" | tail -1 | cut -d'|' -f1)
-            total=$(echo "$output" | tail -1 | cut -d'|' -f2)
+            result_line=$(echo "$output" | tail -1)
+            counts_json=$(echo "$result_line" | cut -d'|' -f1)
+            rows_written=$(echo "$result_line" | cut -d'|' -f2)
+            parsed_total=$(echo "$result_line" | cut -d'|' -f3)
             
             # Parse individual message type counts and build display string
             count_display=""
@@ -261,9 +263,9 @@ $msg_type:$count"
                 count_display="${count_display}${msg_type}=$count"
             done
             
-            echo "  [DONE]   Extracted: $count_display | Total messages: $total"
+            echo "  [DONE]   Extracted: $count_display | Rows written: $rows_written"
             ((processed_files++))
-            ((total_messages_parsed += total))
+            ((total_rows_written += rows_written))
         else
             ((failed_files++))
             echo "  [FAILED] $filename.pcap"
@@ -323,7 +325,7 @@ for msg_type in $MESSAGE_TYPES; do
     echo "  $msg_type ($type_name): $count"
 done
 echo ""
-echo "Total messages parsed:   $total_messages_parsed"
+echo "Total rows written:      $total_rows_written"
 echo "============================================"
 
 # Exit with error if any files failed

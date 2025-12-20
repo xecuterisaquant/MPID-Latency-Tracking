@@ -7,6 +7,31 @@ from mpid_latency.ingest import iter_filtered_itch_messages_from_pcap
 from mpid_latency.parser import ITCHReader
 from mpid_latency import messages
 
+
+def _to_str(value) -> str:
+    """Convert raw bytes or strings to a stripped ASCII string."""
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        value = value.decode('ascii', errors='ignore')
+    return str(value).rstrip()
+
+
+def _to_side(value) -> str:
+    """Normalize Side (enum/str/bytes/int) to its single-character representation."""
+    if value is None:
+        return ""
+    if hasattr(value, 'value'):
+        return str(value.value)
+    if isinstance(value, bytes):
+        return value.decode('ascii', errors='ignore').strip()
+    if isinstance(value, int):
+        try:
+            return chr(value)
+        except ValueError:
+            return str(value)
+    return str(value).strip()
+
 # Mapping from ITCH spec letter codes to message classes
 ITCH_MESSAGE_MAP = {
     'S': messages.SystemEvent,
@@ -37,74 +62,75 @@ def get_message_types_from_codes(codes):
 
 def process_pcap_to_parquet(pcap_path, output_path, message_type_codes):
     """
-    Parse pcap and filter by message types at byte level (fast pre-filtering).
-    
-    Args:
-        pcap_path: Path to input pcap file
-        output_path: Path to output parquet file
-        message_type_codes: List of ITCH spec letter codes (e.g., ['F', 'L'])
-    
-    Returns:
-        tuple of (message_counts_dict, total_count)
-        where message_counts_dict is {message_type_name: count}
+    Parse a pcap, track AddOrderMPID orders, and emit enriched events with schema:
+    event_time_ns | mpid | symbol | side | price | size | message_type
+
+    Cancel/Delete/Replace rows are only emitted when a matching AddOrderMPID has
+    already been observed, ensuring MPID/symbol/side/price context is preserved.
     """
     pcap_path = Path(pcap_path)
     output_path = Path(output_path)
-    
-    # Convert codes to message types
-    message_types = get_message_types_from_codes(message_type_codes)
-    
-    # Create output directory if needed
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    extracted_messages = []
-    message_counts = Counter()
+
+    # Track Add orders for enrichment: order_id -> (mpid, symbol, side, price, size)
+    order_book = {}
+    extracted_events = []
+    extracted_counts = Counter()
     total_messages = 0
-    
-    # Use filtered iterator - only extracts requested message types at byte level (FAST!)
-    # This skips parsing/unpacking all other message types
+
+    # Pre-filter to requested message types (byte-level for speed)
     itch_buffer = io.BytesIO()
     for msg_bytes in iter_filtered_itch_messages_from_pcap(pcap_path, set(message_type_codes)):
         itch_buffer.write(msg_bytes)
-    
-    # Reset buffer position to start
     itch_buffer.seek(0)
-    
-    # Get field names once (avoid repeated introspection)
-    fields_cache = {}
-    
-    # Now ITCHReader only parses the pre-filtered messages
+
     for msg in ITCHReader(itch_buffer):
         total_messages += 1
-        
-        # Messages are already filtered at byte level, so all should match
         msg_type = type(msg)
         msg_type_name = msg_type.__name__
-        message_counts[msg_type_name] += 1
-        
-        # Cache field names per message type
-        if msg_type not in fields_cache:
-            fields_cache[msg_type] = tuple(msg.__dataclass_fields__.keys())
-        
-        # Extract fields and convert enums to strings
-        msg_dict = {}
-        for field in fields_cache[msg_type]:
-            value = getattr(msg, field)
-            # Convert enums to their string values
-            if hasattr(value, 'value'):
-                value = value.value
-            msg_dict[field] = value
-        extracted_messages.append(msg_dict)
-    
-    # Check if we found any messages
-    if not extracted_messages:
-        # Return empty counts for all requested types
-        empty_counts = {ITCH_MESSAGE_MAP[code].__name__: 0 for code in message_type_codes}
-        return empty_counts, total_messages
-    
-    # Save to compressed Parquet (compression level 3 for speed)
-    table = pa.Table.from_pylist(extracted_messages)
-    pq.write_table(table, output_path, compression='zstd', compression_level=3)
-    
-    return dict(message_counts), total_messages
+
+        # Helper to append a normalized event row
+        def _append_event(mpid: str, symbol: str, side: str, price: int, size: int, ts: int):
+            extracted_events.append({
+                'event_time_ns': ts * 1000,
+                'mpid': mpid,
+                'symbol': symbol,
+                'side': side,
+                'price': price,
+                'size': size,
+                'message_type': msg_type_name,
+            })
+            extracted_counts[msg_type_name] += 1
+
+        if isinstance(msg, messages.AddOrderMPID):
+            mpid = _to_str(msg.mpid)
+            symbol = _to_str(msg.stock)
+            side = _to_side(msg.side)
+            order_book[msg.order_id] = (mpid, symbol, side, msg.price, msg.shares)
+            _append_event(mpid, symbol, side, msg.price, msg.shares, msg.timestamp)
+
+        elif isinstance(msg, messages.Cancel):
+            existing = order_book.get(msg.order_id)
+            if existing:
+                mpid, symbol, side, price, _ = existing
+                _append_event(mpid, symbol, side, price, msg.canceled_shares, msg.timestamp)
+
+        elif isinstance(msg, messages.Delete):
+            existing = order_book.pop(msg.order_id, None)
+            if existing:
+                mpid, symbol, side, price, size = existing
+                _append_event(mpid, symbol, side, price, size, msg.timestamp)
+
+        elif isinstance(msg, messages.Replace):
+            existing = order_book.pop(msg.order_id, None)
+            if existing:
+                mpid, symbol, side, _, _ = existing
+                _append_event(mpid, symbol, side, msg.price, msg.shares, msg.timestamp)
+                order_book[msg.new_order_id] = (mpid, symbol, side, msg.price, msg.shares)
+
+    if extracted_events:
+        table = pa.Table.from_pylist(extracted_events)
+        pq.write_table(table, output_path, compression='zstd', compression_level=3)
+
+    return dict(extracted_counts), len(extracted_events), total_messages
 
