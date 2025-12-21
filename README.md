@@ -1,93 +1,283 @@
-# MPID Latency Tracking - Group 07 Project
+# MPID Latency Tracking - Cross-Market Response Times
 
-## High-Frequency Liquidity Provider Response Latency to External Price Shocks
-
-This project analyzes how quickly NASDAQ market makers (MPIDs) react to CME E-mini S&P 500 (ES) futures trades, measuring sub-millisecond latencies in equity market responses to external price shocks.
+**Measuring high-frequency liquidity provider reaction latencies from ES futures trades to NASDAQ order updates**
 
 ### Team Members
-- Harsh
-- Ivaylo  
-- Chintan
+- Harsh, Ivaylo, Chintan
 
-### Quick Start
+---
 
-See [PROJECT_STATUS.md](PROJECT_STATUS.md) for current project status and [docs/VM_DEPLOYMENT.md](docs/VM_DEPLOYMENT.md) for deployment instructions.
+## Executive Summary
 
-### Repository Structure
-git remote add origin https://gitlab.engr.illinois.edu/fin556_algo_market_micro_fall_2025/fin556_algo_market_micro_fall_2025_07/group_07_project.git
-git branch -M main
-git push -uf origin main
+This project measures how fast NASDAQ market makers react to CME E-mini S&P 500 (ES) futures trades. We track 12.25 million latency observations from March 10, 2025 (7.74 hours of trading), revealing extreme market concentration and surprising differences in firm behavior.
+
+**Key Findings:**
+- **95.7% of activity** dominated by just 3 firms (Wolverine, Wedbush, JP Morgan)
+- **~96ms median latency** for active market makers (Chicago → NASDAQ full pipeline)
+- **26x symbol variation**: QQQ at 35.6ms vs META at 929ms median
+- "Famous HFT firms" (Citadel, Virtu, IMC) barely participate - sporadic 4+ second latencies
+
+---
+
+## Quick Start
+
+```bash
+# Install dependencies
+python -m venv .venv
+.venv\Scripts\activate  # Windows
+pip install -r requirements.txt
+
+# Run latency analysis
+python analysis/latency_join_pipeline.py --trade-date 2025-03-10
+
+# Generate analytics
+python analysis/generate_analytics_seaborn.py --results data/output/latencies.parquet --output data/output/analytics
 ```
 
-## Integrate with your tools
+**Results:** `data/output/analytics/` (8 publication-quality figures + tables + interpretation)
 
-- [ ] [Set up project integrations](https://gitlab.engr.illinois.edu/fin556_algo_market_micro_fall_2025/fin556_algo_market_micro_fall_2025_07/group_07_project/-/settings/integrations)
+---
 
-## Collaborate with your team
+## Repository Structure
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+```
+MPID-Latency-Tracking/
+├── analysis/               # Analytics pipeline
+│   ├── latency_join_pipeline.py    # Main processing (ES → NASDAQ matching)
+│   └── generate_analytics_seaborn.py   # Visualization generation
+├── mpid_latency/          # Core matching engine
+│   ├── ingest.py          # ES futures data loading
+│   ├── parser.py          # NASDAQ ITCH parser
+│   └── messages.py        # Binary message structures
+├── mpid_lookup/           # Firm categorization
+│   ├── mpid_to_firm.py    # MPID → firm name mapping
+│   └── mpidlist.txt       # MPID registry
+├── data/
+│   ├── itch/              # ES futures trades (CSV)
+│   ├── pcap/              # NASDAQ ITCH data (PCAP)
+│   └── output/
+│       ├── latencies.parquet         # Final results (12.25M rows)
+│       └── analytics/                # Figures + tables
+├── tests/                 # Test suite
+└── README.md
+```
 
-## Test and Deploy
+---
 
-Use the built-in continuous integration in GitLab.
+## Methodology
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+### Data Sources
+1. **ES Futures Trades** (CME Chicago)
+   - Source: QuantConnect/LEAN ES data
+   - Coverage: March 10, 2025, 6:00 AM - 4:39 PM ET
+   - Format: CSV with nanosecond timestamps
+   
+2. **NASDAQ ITCH Events** (NASDAQ Carteret, NJ)
+   - Source: NASDAQ TotalView-ITCH 5.0 PCAP files
+   - Coverage: March 10, 2025, 8:15 AM - 4:00 PM ET
+   - Events: AddOrderMPID, Replace, Delete (with MPID attribution)
 
-***
+### Latency Calculation
+```
+Latency = NASDAQ_event_timestamp - ES_trade_timestamp
+```
 
-# Editing this README
+**Key Challenge Solved:** ES timestamps were UTC-encoded but represented EDT times. Applied +4 hour offset to align with NASDAQ's EDT-based system. Final overlap: 8:15 AM - 4:00 PM ET (7.74 hours).
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+### Matching Algorithm
+- Binary search on sorted NASDAQ events within 10-second window
+- Filters: same symbol, event after ES trade
+- Deduplication: First matching event per (ES trade, MPID, symbol)
+- Result: 12,252,369 latency measurements across 51 MPIDs, 10 symbols
 
-## Suggestions for a good README
+---
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+## Key Results
 
-## Name
-Choose a self-explaining name for your project.
+### 1. Market Concentration (Top 3 = 95.7%)
+| Firm | Count | Median Latency | % of Total |
+|------|-------|----------------|------------|
+| Wedbush Securities | 4.24M | 96.3 ms | 34.6% |
+| Wolverine Trading | 4.16M | 95.9 ms | 34.0% |
+| JP Morgan Securities | 3.32M | 97.3 ms | 27.1% |
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+### 2. Firm Category Performance
+- **Active Fast Market Makers**: 96.4ms median (11.72M obs)
+- **Sporadic/Slow HFT**: 4,578ms median (391K obs) - **48x slower**
+- **Traditional Brokers**: 3,943ms median (124K obs)
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+### 3. Symbol-Level Variation (26x difference)
+- **Fastest**: QQQ at 35.6ms median
+- **Slowest**: META at 929ms median
+- Active MMs focus on high-liquidity names (SPY, QQQ, IWM)
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+### 4. Statistical Validation
+- Kruskal-Wallis tests: All p < 0.001
+- Effect sizes: MPID explains 10.3% variance (medium-large)
+- Temporal clustering present (95% obs within 1s) but doesn't invalidate findings
+- Results robust across sample sizes (10K - 12M observations)
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+---
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+## Technical Details
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+### Timestamp Handling
+**Critical Fix:** ES data timestamps were Unix epoch values in UTC encoding but represented EDT times. Added 4-hour offset:
+```python
+EDT_OFFSET_NS = 4 * 3600 * 1_000_000_000
+df['trade_time_ns'] = df['trade_time_ns'] + EDT_OFFSET_NS
+```
+Validated with comprehensive sanity checks (9/9 passed).
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+### Performance Optimizations
+- Numba JIT compilation for binary search (100x speedup)
+- Parquet format for compressed storage
+- Chunked processing for memory efficiency
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+### Data Quality
+- ✅ No negative latencies
+- ✅ No zero latencies  
+- ✅ All latencies < 10 seconds (matching window)
+- ✅ 48.8% under 100ms (physically reasonable)
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+---
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+## Figures & Analytics
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+Generated in `data/output/analytics/`:
+
+1. **latency_distribution.png** - Overall histogram + log-scale view
+2. **firm_category_analysis.png** - Boxplots + KDE overlays by category
+3. **latency_by_firm.png** - Violin plots for top 12 firms
+4. **latency_by_mpid.png** - Top 15 MPIDs (color-coded by category)
+5. **latency_by_symbol.png** - Symbol comparison with volume
+6. **latency_time_of_day.png** - Hourly patterns + activity volume
+7. **event_type_analysis.png** - Replace (95%) vs Add (4%) vs Delete (1%)
+
+**Tables:** Summary statistics, firm breakdowns, statistical test results
+
+---
+
+## Running the Analysis
+
+### Prerequisites
+- Python 3.10+
+- 16GB+ RAM recommended
+- Windows/Linux/Mac
+
+### Installation
+```bash
+git clone <repo-url>
+cd MPID-Latency-Tracking
+python -m venv .venv
+source .venv/bin/activate  # Linux/Mac
+# or
+.venv\Scripts\activate     # Windows
+pip install -r requirements.txt
+```
+
+### Full Pipeline
+```bash
+# 1. Process ES → NASDAQ latencies
+python analysis/latency_join_pipeline.py \
+    --trade-date 2025-03-10 \
+    --es-data data/itch/ \
+    --nasdaq-pcap data/pcap/ \
+    --output data/output/latencies.parquet
+
+# 2. Generate analytics
+python analysis/generate_analytics_seaborn.py \
+    --results data/output/latencies.parquet \
+    --output data/output/analytics
+
+# 3. Validate statistics
+python validate_statistical_tests.py
+```
+
+### Testing
+```bash
+pytest tests/ -v
+```
+
+---
+
+## Findings & Implications
+
+### For Market Structure
+- Extreme concentration: 3 firms control 95.7% of MPID-attributed liquidity
+- Barrier to entry is high: requires sub-100ms cross-market infrastructure
+- Market resilience depends on continued participation of top 3
+
+### For Trading
+- 96ms represents competitive performance (network + processing + logging)
+- Symbol selection matters: 26x latency difference based on focus
+- "Famous HFT firms" may be focused elsewhere (options, other venues, different strategies)
+
+### For Regulation
+- Speed bumps >100ms could disadvantage legitimate market makers
+- MPID attribution enables transparency into liquidity provision patterns
+- Concentration risk: 95.7% from 3 firms is potential systemic concern
+
+---
+
+## Literature & References
+
+**Market Microstructure:**
+- Hasbrouck & Saar (2013) - Low-latency trading
+- Brogaard et al. (2014) - High-frequency trading and price discovery
+- Baron et al. (2019) - Risk and return in high-frequency trading
+
+**Cross-Market Latency:**
+- Menkveld (2013) - High-frequency trading and the new market makers
+- Laughlin et al. (2014) - The Flash Crash: High-frequency trading in an electronic market
+
+**Data Specifications:**
+- NASDAQ TotalView-ITCH 5.0 Specification
+- CME Group Market Data Platform
+
+---
+
+## Known Limitations
+
+1. **Single trading day**: March 10, 2025 only (7.74 hours)
+2. **Temporal clustering**: 95% of observations within 1s violates independence assumption
+3. **Causality assumption**: First matching NASDAQ event may not be causal response
+4. **Symbol selection**: 10 symbols (SPY, QQQ, IWM, FAANG+) - not comprehensive
+5. **MPID coverage**: Only MPID-attributed events (excludes anonymous liquidity)
+
+---
+
+## Future Work
+
+- [ ] Multi-day analysis for robustness
+- [ ] Mixed-effects models to account for temporal clustering  
+- [ ] Granger causality tests for causal validation
+- [ ] Expand to full symbol universe
+- [ ] Compare to options market latencies
+- [ ] Analyze during high-volatility events (FOMC, earnings)
+
+---
+
+## Citation
+
+```bibtex
+@misc{harsh2025mpidlatency,
+  title={Cross-Market MPID Latency Tracking: ES Futures to NASDAQ Equity Responses},
+  author={Harsh and Ivaylo and Chintan},
+  year={2025},
+  month={March},
+  note={FIN 556 - Algorithmic Market Microstructure, UIUC}
+}
+```
+
+---
 
 ## License
-For open source projects, say how it is licensed.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
->>>>>>> 614799a739f85ba0604fbb582eabe2041467158e
+Academic use only. Data sources subject to respective provider terms of service.
+
+---
+
+## Contact
+
+For questions: See course GitLab or contact team members via UIUC email.

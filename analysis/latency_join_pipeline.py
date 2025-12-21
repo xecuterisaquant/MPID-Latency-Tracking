@@ -59,7 +59,7 @@ class LatencyJoinPipeline:
         Args:
             trade_date: Date string in YYYY-MM-DD format
         """
-        self.trade_date = pd.Timestamp(trade_date, tz='UTC')
+        self.trade_date = pd.Timestamp(trade_date, tz='America/New_York')
         logger.info(f"Initialized LatencyJoinPipeline for {trade_date}")
     
     def load_es_trades(self, filepath: Path, min_trade_size: int = 1) -> pd.DataFrame:
@@ -88,6 +88,13 @@ class LatencyJoinPipeline:
             'trade_px': 'price',
             'trade_sz': 'size',
         })
+        
+        # CRITICAL FIX: ES timestamps are encoded as UTC but represent EDT times
+        # The data is from 6 AM - 4:39 PM EDT, but timestamps act like 6 AM - 4:39 PM UTC
+        # To align with NASDAQ (which is properly in EDT), add 4 hours (EDT offset)
+        EDT_OFFSET_NS = 4 * 3600 * 1_000_000_000  # 4 hours in nanoseconds
+        df['trade_time_ns'] = df['trade_time_ns'] + EDT_OFFSET_NS
+        logger.info(f"  ✓ Adjusted ES timestamps by +4 hours (UTC→EDT alignment)")
         
         # Add contract name from security_id
         df['contract'] = df['security_id'].map(ES_SECURITY_IDS).fillna('UNKNOWN')
@@ -145,9 +152,9 @@ class LatencyJoinPipeline:
         # NOTE: The NASDAQ parquet files have timestamps multiplied by 1000 (extraction bug)
         # ITCH timestamps are nanoseconds since midnight, but were multiplied by 1000
         # So we divide by 1000 first, then add to Eastern midnight
-        eastern_midnight = pd.Timestamp(self.trade_date.date(), tz='America/New_York')
+        # trade_date is already midnight Eastern Time
         df['event_time_absolute_ns'] = (
-            eastern_midnight.value +      # Unix epoch ns for midnight Eastern Time
+            self.trade_date.value +       # Unix epoch ns for midnight Eastern Time
             (df['event_time_ns'] / 1000)  # Correct the 1000x multiplier, then add
         )
         
@@ -335,8 +342,9 @@ class LatencyJoinPipeline:
         df = latencies.copy()
         
         # Convert to datetime for feature extraction
-        df['es_trade_datetime'] = pd.to_datetime(df['es_trade_time_ns'], unit='ns', utc=True)
-        df['es_trade_datetime_et'] = df['es_trade_datetime'].dt.tz_convert('America/New_York')
+        # Both ES and NASDAQ timestamps are now aligned to EDT offsets
+        # They're Unix epoch + EDT offset, so interpret as UTC then convert to show EDT
+        df['es_trade_datetime_et'] = pd.to_datetime(df['es_trade_time_ns'], unit='ns', utc=True).dt.tz_convert('America/New_York')
         
         # Time-of-day features
         df['hour_of_day'] = df['es_trade_datetime_et'].dt.hour

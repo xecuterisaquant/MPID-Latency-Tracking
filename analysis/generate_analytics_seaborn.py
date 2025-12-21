@@ -153,6 +153,56 @@ class LatencyAnalytics:
         logger.info(f"  ✓ Saved {output_path.name}")
         plt.close()
     
+    def generate_mpid_breakdown(self, top_n: int = 15):
+        """MPID-level breakdown with category-based coloring."""
+        logger.info(f"\n📊 Generating MPID breakdown (top {top_n})...")
+        
+        top_mpids = self.df['mpid'].value_counts().head(top_n).index.tolist()
+        df_top = self.df[self.df['mpid'].isin(top_mpids)].copy()
+        
+        # Sort by median latency
+        mpid_medians = df_top.groupby('mpid')['latency_us'].median().sort_values()
+        df_top['mpid'] = pd.Categorical(df_top['mpid'], categories=mpid_medians.index, ordered=True)
+        
+        # Map MPIDs to categories for coloring
+        mpid_to_category = df_top.groupby('mpid')['firm_category'].agg(
+            lambda x: x.mode()[0] if len(x.mode()) > 0 else 'Other'
+        ).to_dict()
+        category_colors = {
+            'Active Fast Market Maker': '#2ecc71', 
+            'Sporadic/Slow HFT': '#e74c3c',
+            'Traditional Broker': '#3498db', 
+            'Other': '#95a5a6'
+        }
+        colors = [category_colors.get(mpid_to_category.get(mpid, 'Other'), '#95a5a6') 
+                  for mpid in mpid_medians.index]
+        
+        fig, ax = plt.subplots(figsize=(16, 7))
+        sns.boxplot(data=df_top, x='mpid', y='latency_us',
+                   palette=colors, ax=ax, linewidth=1.5,
+                   flierprops=dict(marker='o', markersize=1, alpha=0.1))
+        ax.set_yscale('log')
+        ax.set_ylabel('Latency (μs, log scale)', fontweight='bold', fontsize=13)
+        ax.set_xlabel('MPID', fontweight='bold', fontsize=13)
+        ax.set_title(f'Reaction Latency by MPID (Top {top_n} by Activity)',
+                    fontweight='bold', fontsize=15, pad=20)
+        ax.grid(axis='y', alpha=0.25, which='both')
+        plt.xticks(rotation=90, fontsize=10)
+        
+        # Add counts above each box
+        for i, mpid in enumerate(mpid_medians.index):
+            count = len(df_top[df_top['mpid'] == mpid])
+            median = mpid_medians[mpid]
+            y_pos = ax.get_ylim()[1] * 0.85
+            ax.text(i, y_pos, f'n={count:,}',
+                   ha='center', va='bottom', fontsize=7, rotation=90)
+        
+        plt.tight_layout()
+        output_path = self.figures_dir / "latency_by_mpid.png"
+        plt.savefig(output_path, dpi=300, bbox_inches='tight', facecolor='white')
+        logger.info(f"  ✓ Saved {output_path.name}")
+        plt.close()
+    
     def generate_time_of_day_analysis(self):
         """Clean time-of-day analysis with error bands."""
         logger.info("\n📊 Generating time-of-day analysis...")
@@ -297,34 +347,47 @@ class LatencyAnalytics:
         plt.close()
     
     def generate_hft_vs_traditional(self):
-        """Beautiful HFT vs Traditional broker comparison."""
-        logger.info("\n📊 Generating HFT vs Traditional analysis...")
+        """Beautiful firm category comparison."""
+        logger.info("\n📊 Generating firm category analysis...")
+        
+        # Sample data to avoid memory issues (500k per category max)
+        df_sampled = self.df.groupby('firm_category', group_keys=False).apply(
+            lambda x: x.sample(min(len(x), 500000), random_state=42)
+        ).reset_index(drop=True)
         
         fig, axes = plt.subplots(1, 2, figsize=(15, 6.5))
         
-        # Violin comparison
+        # Order categories by median latency
+        cat_order = df_sampled.groupby('firm_category')['latency_us'].median().sort_values().index.tolist()
+        
+        # Box plot comparison
         ax = axes[0]
-        sns.violinplot(data=self.df, x='firm_category', y='latency_us',
-                      palette=['#3498db', '#e74c3c'], inner='box', ax=ax,
-                      alpha=0.7, linewidth=2)
+        sns.boxplot(data=df_sampled, x='firm_category', y='latency_us',
+                   order=cat_order, palette=['#2ecc71', '#e74c3c', '#95a5a6', '#3498db'],
+                   ax=ax, linewidth=2, flierprops=dict(marker='o', markersize=2, alpha=0.1))
         ax.set_yscale('log')
         ax.set_ylabel('Latency (μs, log scale)', fontweight='bold', fontsize=13)
         ax.set_xlabel('Firm Category', fontweight='bold', fontsize=13)
         ax.set_title('HFT vs Traditional Broker Latencies', fontweight='bold', fontsize=14, pad=15)
         ax.grid(axis='y', alpha=0.25, which='both')
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=20, ha='right', fontsize=11)
         
         # Histogram overlay
         ax = axes[1]
-        for cat, color in zip(['HFT/Market Maker', 'Traditional Broker-Dealer'],
-                             ['#3498db', '#e74c3c']):
+        colors = {'Active Fast Market Maker': '#2ecc71', 'Sporadic/Slow HFT': '#e74c3c',
+                  'Traditional Broker': '#3498db', 'Other': '#95a5a6'}
+        for cat in cat_order:
             data = self.df[self.df['firm_category'] == cat]['latency_us']
-            if len(data) > 0:
+            if len(data) > 100:  # Only plot if sufficient data
+                # Sample for histogram too
+                if len(data) > 100000:
+                    data = data.sample(100000, random_state=42)
                 sns.histplot(np.log10(data), bins=60, kde=True, alpha=0.5,
-                           color=color, label=cat, ax=ax, linewidth=0)
+                           color=colors.get(cat, '#95a5a6'), label=cat, ax=ax, linewidth=0, stat='density')
         ax.set_xlabel('log₁₀(Latency in μs)', fontweight='bold', fontsize=13)
         ax.set_ylabel('Density', fontweight='bold', fontsize=13)
         ax.set_title('Latency Distribution Overlay', fontweight='bold', fontsize=14, pad=15)
-        ax.legend(fontsize=11, frameon=True, fancybox=True, shadow=True)
+        ax.legend(fontsize=10, frameon=True, fancybox=True, shadow=True)
         ax.grid(axis='y', alpha=0.3, linestyle='--')
         
         plt.tight_layout()
@@ -426,6 +489,7 @@ class LatencyAnalytics:
         
         self.generate_latency_histogram()
         self.generate_firm_violin_plot()
+        self.generate_mpid_breakdown()
         self.generate_time_of_day_analysis()
         self.generate_symbol_comparison()
         self.generate_event_type_analysis()
