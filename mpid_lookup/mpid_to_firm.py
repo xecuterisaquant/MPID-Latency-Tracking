@@ -99,22 +99,38 @@ def get_firm_name(mpid: str) -> str:
     return MPID_TO_FIRM.get(mpid, mpid)
 
 def get_firm_category(firm: str) -> str:
-    """Categorize firms by business model."""
-    hft_firms = {
-        'Citadel Securities', 'Virtu Financial', 'Jane Street', 'Jump Trading',
-        'IMC', 'Wolverine Trading', 'Two Sigma Securities', 'Hudson River Trading',
-        'GTS', 'Susquehanna (SIG)', 'Flow Traders', 'XGW Capital'
+    """
+    Categorize firms by actual trading behavior (not corporate structure).
+    Based on observed latency and activity patterns in the data.
+    """
+    # Dominant, ultra-fast market makers (14-17ms, 90%+ of activity)
+    # These are the ACTUAL liquidity providers on these symbols
+    active_fast_mm = {
+        'Wolverine Trading',      # 16.6ms median, 35% of all activity
+        'Wedbush Securities',     # 15.1ms median, 30% of all activity
+        'JP Morgan Securities',   # 14.3ms median, 27% of all activity
     }
     
-    traditional_brokers = {
-        'JP Morgan Securities', 'Goldman Sachs', 'Bank of America Merrill Lynch',
-        'Morgan Stanley', 'UBS Securities', 'Deutsche Bank', 'Credit Suisse',
-        'Barclays', 'Wedbush Securities'
+    # Sporadic/slow participants (3-6 seconds, <5% activity)
+    # Known HFT firms but NOT active market makers on these symbols
+    sporadic_slow = {
+        'IMC', 'Citadel Securities', 'Virtu Financial', 'Flow Traders',
+        'Susquehanna (SIG)', 'XGW Capital', 'Jane Street', 'Jump Trading',
+        'Two Sigma Securities', 'Hudson River Trading', 'GTS',
+        'Electronic Trading & MM'
     }
     
-    if firm in hft_firms:
-        return 'HFT / Market Maker'
-    elif firm in traditional_brokers:
-        return 'Traditional Broker-Dealer'
+    # Traditional/agency brokers (slow, low activity)
+    traditional_slow = {
+        'Goldman Sachs', 'Bank of America Merrill Lynch', 'Morgan Stanley',
+        'UBS Securities', 'Deutsche Bank', 'Credit Suisse', 'Barclays'
+    }
+    
+    if firm in active_fast_mm:
+        return 'Active Fast Market Maker'
+    elif firm in sporadic_slow:
+        return 'Sporadic/Slow HFT'
+    elif firm in traditional_slow:
+        return 'Traditional Broker'
     else:
         return 'Other'
