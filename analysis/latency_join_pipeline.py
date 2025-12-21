@@ -28,6 +28,7 @@ import pyarrow.parquet as pq
 from typing import Optional, Tuple, List
 import logging
 import sys
+from numba import njit, prange
 
 # Add project root to path for config import
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -140,11 +141,14 @@ class LatencyJoinPipeline:
             df = df[df['symbol'].isin(target_symbols)].copy()
             logger.info(f"  Filtered to {len(df):,} events for target symbols: {target_symbols}")
         
-        # Convert event_time_ns (ns since midnight) to absolute timestamp
-        # Assume NASDAQ timestamps are nanoseconds since midnight of trade_date
+        # Convert event_time_ns to absolute timestamp
+        # NOTE: The NASDAQ parquet files have timestamps multiplied by 1000 (extraction bug)
+        # ITCH timestamps are nanoseconds since midnight, but were multiplied by 1000
+        # So we divide by 1000 first, then add to Eastern midnight
+        eastern_midnight = pd.Timestamp(self.trade_date.date(), tz='America/New_York')
         df['event_time_absolute_ns'] = (
-            self.trade_date.value +  # Unix epoch ns for midnight of trade_date
-            df['event_time_ns']      # ns since midnight
+            eastern_midnight.value +      # Unix epoch ns for midnight Eastern Time
+            (df['event_time_ns'] / 1000)  # Correct the 1000x multiplier, then add
         )
         
         # Sort by timestamp for efficient searching
@@ -155,6 +159,94 @@ class LatencyJoinPipeline:
         logger.info(f"    Absolute range: {df['event_time_absolute_ns'].min():,} to {df['event_time_absolute_ns'].max():,}")
         
         return df
+    
+    @staticmethod
+    @njit(parallel=False, fastmath=True)  # Disable parallel due to result_count race condition
+    def _find_latencies_numba(
+        es_timestamps: np.ndarray,
+        nasdaq_timestamps: np.ndarray,
+        nasdaq_symbol_ids: np.ndarray,
+        nasdaq_mpid_ids: np.ndarray,
+        nasdaq_event_type_ids: np.ndarray,
+        max_latency_ns: int
+    ):
+        """
+        Numba-compiled function for fast latency computation.
+        Uses near-C performance for the hot loop.
+        
+        Returns parallel arrays of results.
+        """
+        n_es = len(es_timestamps)
+        
+        # Pre-allocate result arrays (max size estimate)
+        max_results = n_es * 100  # Assume avg 100 MPIDs per trade
+        
+        es_times = np.empty(max_results, dtype=np.int64)
+        mpid_ids = np.empty(max_results, dtype=np.int32)
+        symbol_ids = np.empty(max_results, dtype=np.int32)
+        event_type_ids = np.empty(max_results, dtype=np.int32)
+        latencies = np.empty(max_results, dtype=np.int64)
+        nasdaq_times = np.empty(max_results, dtype=np.int64)
+        
+        result_count = 0
+        
+        # Process trades sequentially (still much faster than pure Python)
+        for i in range(n_es):
+            es_time = es_timestamps[i]
+            
+            # Binary search for first event after ES trade
+            search_idx = np.searchsorted(nasdaq_timestamps, es_time)
+            
+            # Find end of search window
+            end_time = es_time + max_latency_ns
+            end_idx = np.searchsorted(nasdaq_timestamps, end_time)
+            
+            if search_idx >= len(nasdaq_timestamps):
+                continue
+            
+            # Track first occurrence of each (MPID, symbol) pair
+            seen_pairs = np.empty((1000, 2), dtype=np.int32)  # Max 1000 unique pairs per trade
+            n_seen = 0
+            
+            # Iterate through window
+            for j in range(search_idx, end_idx):
+                mpid_id = nasdaq_mpid_ids[j]
+                symbol_id = nasdaq_symbol_ids[j]
+                
+                # Check if we've seen this (MPID, symbol) pair
+                is_new = True
+                for k in range(n_seen):
+                    if seen_pairs[k, 0] == mpid_id and seen_pairs[k, 1] == symbol_id:
+                        is_new = False
+                        break
+                
+                if is_new:
+                    # First occurrence of this (MPID, symbol)
+                    if n_seen < 1000:
+                        seen_pairs[n_seen, 0] = mpid_id
+                        seen_pairs[n_seen, 1] = symbol_id
+                        n_seen += 1
+                    
+                    # Record this latency
+                    if result_count < max_results:
+                        es_times[result_count] = es_time
+                        mpid_ids[result_count] = mpid_id
+                        symbol_ids[result_count] = symbol_id
+                        event_type_ids[result_count] = nasdaq_event_type_ids[j]
+                        latencies[result_count] = nasdaq_timestamps[j] - es_time
+                        nasdaq_times[result_count] = nasdaq_timestamps[j]
+                        result_count += 1
+        
+        # Trim to actual size
+        return (
+            es_times[:result_count],
+            mpid_ids[:result_count],
+            symbol_ids[:result_count],
+            event_type_ids[:result_count],
+            latencies[:result_count],
+            nasdaq_times[:result_count],
+            result_count
+        )
     
     def compute_latencies(
         self,
@@ -186,67 +278,47 @@ class LatencyJoinPipeline:
         logger.info(f"  ES trades: {len(es_trades):,}")
         logger.info(f"  NASDAQ events: {len(nasdaq_events):,}")
         logger.info(f"  Max latency window: {max_latency_seconds}s")
+        logger.info("  Using Numba JIT compilation for near-C performance...")
         
         max_latency_ns = int(max_latency_seconds * 1e9)
         
-        # Pre-compute for efficiency
-        nasdaq_timestamps = nasdaq_events['event_time_absolute_ns'].values
-        nasdaq_symbols = nasdaq_events['symbol'].values
-        nasdaq_mpids = nasdaq_events['mpid'].values
-        nasdaq_types = nasdaq_events['message_type'].values
+        # Pre-compute arrays and encode categorical data as integers
+        es_timestamps = es_trades['trade_time_ns'].values.astype(np.int64)
+        nasdaq_timestamps = nasdaq_events['event_time_absolute_ns'].values.astype(np.int64)
         
-        results = []
-        num_chunks = (len(es_trades) + chunk_size - 1) // chunk_size
+        # Encode symbols, MPIDs, and event types as integer IDs
+        symbol_categories = pd.Categorical(nasdaq_events['symbol'])
+        mpid_categories = pd.Categorical(nasdaq_events['mpid'])
+        event_type_categories = pd.Categorical(nasdaq_events['message_type'])
         
-        for chunk_idx in range(num_chunks):
-            start_idx = chunk_idx * chunk_size
-            end_idx = min((chunk_idx + 1) * chunk_size, len(es_trades))
-            chunk = es_trades.iloc[start_idx:end_idx]
-            
-            for idx, trade in chunk.iterrows():
-                es_time = trade['trade_time_ns']
-                
-                # Binary search for first event after ES trade
-                search_idx = np.searchsorted(nasdaq_timestamps, es_time, side='right')
-                
-                # Search within latency window
-                end_search_idx = np.searchsorted(
-                    nasdaq_timestamps,
-                    es_time + max_latency_ns,
-                    side='right'
-                )
-                
-                if search_idx >= len(nasdaq_timestamps):
-                    continue  # No events after this trade
-                
-                # Get all events in window
-                window_events = nasdaq_events.iloc[search_idx:end_search_idx]
-                
-                if len(window_events) == 0:
-                    continue
-                
-                # Group by (MPID, symbol) and take first event for each
-                # This ensures we measure first reaction per MPID per symbol
-                for (mpid, symbol), group in window_events.groupby(['mpid', 'symbol']):
-                    first_event = group.iloc[0]
-                    latency_ns = first_event['event_time_absolute_ns'] - es_time
-                    
-                    results.append({
-                        'es_trade_time_ns': es_time,
-                        'mpid': mpid,
-                        'symbol': symbol,
-                        'event_type': first_event['message_type'],
-                        'latency_ns': latency_ns,
-                        'nasdaq_event_time_ns': first_event['event_time_absolute_ns'],
-                        'side': first_event.get('side', None),
-                    })
-            
-            if (chunk_idx + 1) % 10 == 0:
-                logger.info(f"  Processed {end_idx:,}/{len(es_trades):,} trades ({len(results):,} latencies so far)")
+        nasdaq_symbol_ids = symbol_categories.codes.astype(np.int32)
+        nasdaq_mpid_ids = mpid_categories.codes.astype(np.int32)
+        nasdaq_event_type_ids = event_type_categories.codes.astype(np.int32)
         
-        logger.info(f"✓ Computed {len(results):,} latencies")
+        # Call Numba-compiled function
+        (es_times, mpid_ids, symbol_ids, event_type_ids, 
+         latencies, nasdaq_times, result_count) = self._find_latencies_numba(
+            es_timestamps,
+            nasdaq_timestamps,
+            nasdaq_symbol_ids,
+            nasdaq_mpid_ids,
+            nasdaq_event_type_ids,
+            max_latency_ns
+        )
         
-        return pd.DataFrame(results)
+        logger.info(f"✓ Computed {result_count:,} latencies")
+        
+        # Decode categorical IDs back to strings
+        df = pd.DataFrame({
+            'es_trade_time_ns': es_times,
+            'mpid': pd.Categorical.from_codes(mpid_ids, mpid_categories.categories),
+            'symbol': pd.Categorical.from_codes(symbol_ids, symbol_categories.categories),
+            'event_type': pd.Categorical.from_codes(event_type_ids, event_type_categories.categories),
+            'latency_ns': latencies,
+            'nasdaq_event_time_ns': nasdaq_times,
+        })
+        
+        return df
     
     def enrich_with_features(self, latencies: pd.DataFrame) -> pd.DataFrame:
         """
