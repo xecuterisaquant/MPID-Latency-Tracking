@@ -1,4 +1,4 @@
-Statistic,Value (μs)
+,latency_us
 count,11861028.0
 mean,603770.2181400197
 std,1659570.299262817

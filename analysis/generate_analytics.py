@@ -19,6 +19,7 @@ import logging
 import argparse
 from datetime import datetime
 import sys
+from scipy import stats
 
 # Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -374,6 +375,194 @@ class LatencyAnalytics:
         event_stats.to_csv(event_path)
         logger.info(f"  ✓ Saved event type statistics to {event_path}")
     
+    def run_statistical_tests(self):
+        """Run hypothesis tests for MPID, time-of-day, and symbol differences."""
+        logger.info("\n📈 Running statistical hypothesis tests...")
+        
+        results = {}
+        
+        # H1: Kruskal-Wallis test for MPID differences
+        logger.info("\n  H1: Testing for differences across MPIDs (Kruskal-Wallis)")
+        mpid_groups = [group['latency_us'].values for name, group in self.df.groupby('mpid') if len(group) >= 100]
+        if len(mpid_groups) >= 2:
+            h_stat, p_value = stats.kruskal(*mpid_groups)
+            results['H1_MPID_KruskalWallis'] = {'H_statistic': h_stat, 'p_value': p_value, 'significant': p_value < 0.01}
+            logger.info(f"    H-statistic: {h_stat:.2f}, p-value: {p_value:.2e}, Significant: {p_value < 0.01}")
+        
+        # H2: ANOVA for time-of-day effects
+        logger.info("\n  H2: Testing for time-of-day effects (Kruskal-Wallis)")
+        hour_groups = [group['latency_us'].values for name, group in self.df.groupby('hour_of_day') if len(group) >= 100]
+        if len(hour_groups) >= 2:
+            h_stat, p_value = stats.kruskal(*hour_groups)
+            results['H2_TimeOfDay_KruskalWallis'] = {'H_statistic': h_stat, 'p_value': p_value, 'significant': p_value < 0.01}
+            logger.info(f"    H-statistic: {h_stat:.2f}, p-value: {p_value:.2e}, Significant: {p_value < 0.01}")
+        
+        # H3: Kruskal-Wallis test for symbol differences
+        logger.info("\n  H3: Testing for differences across symbols (Kruskal-Wallis)")
+        symbol_groups = [group['latency_us'].values for name, group in self.df.groupby('symbol') if len(group) >= 100]
+        if len(symbol_groups) >= 2:
+            h_stat, p_value = stats.kruskal(*symbol_groups)
+            results['H3_Symbol_KruskalWallis'] = {'H_statistic': h_stat, 'p_value': p_value, 'significant': p_value < 0.01}
+            logger.info(f"    H-statistic: {h_stat:.2f}, p-value: {p_value:.2e}, Significant: {p_value < 0.01}")
+        
+        # Pairwise Mann-Whitney U tests for top 3 firms
+        logger.info("\n  Pairwise Mann-Whitney U tests for top 3 firms:")
+        top_firms = self.df['firm'].value_counts().head(3).index.tolist()
+        for i, firm1 in enumerate(top_firms):
+            for firm2 in top_firms[i+1:]:
+                data1 = self.df[self.df['firm'] == firm1]['latency_us'].values
+                data2 = self.df[self.df['firm'] == firm2]['latency_us'].values
+                u_stat, p_value = stats.mannwhitneyu(data1, data2, alternative='two-sided')
+                results[f'MannWhitneyU_{firm1}_vs_{firm2}'] = {'U_statistic': u_stat, 'p_value': p_value, 'significant': p_value < 0.01}
+                logger.info(f"    {firm1} vs {firm2}: U={u_stat:.2e}, p={p_value:.2e}, Sig={p_value < 0.01}")
+        
+        # HFT vs Traditional broker comparison
+        logger.info("\n  HFT vs Traditional Broker comparison (Mann-Whitney U):")
+        hft_data = self.df[self.df['firm_category'] == 'HFT/Market Maker']['latency_us'].values
+        trad_data = self.df[self.df['firm_category'] == 'Traditional Broker-Dealer']['latency_us'].values
+        if len(hft_data) > 0 and len(trad_data) > 0:
+            u_stat, p_value = stats.mannwhitneyu(hft_data, trad_data, alternative='two-sided')
+            results['HFT_vs_Traditional'] = {
+                'U_statistic': u_stat, 
+                'p_value': p_value, 
+                'significant': p_value < 0.01,
+                'HFT_median': np.median(hft_data),
+                'Traditional_median': np.median(trad_data),
+                'speedup_factor': np.median(trad_data) / np.median(hft_data)
+            }
+            logger.info(f"    HFT median: {np.median(hft_data):.2f}μs")
+            logger.info(f"    Traditional median: {np.median(trad_data):.2f}μs")
+            logger.info(f"    Speedup factor: {np.median(trad_data) / np.median(hft_data):.1f}x")
+            logger.info(f"    U={u_stat:.2e}, p={p_value:.2e}, Sig={p_value < 0.01}")
+        
+        # Save results
+        results_df = pd.DataFrame(results).T
+        results_path = self.tables_dir / "statistical_tests.csv"
+        results_df.to_csv(results_path)
+        logger.info(f"\n  ✓ Saved statistical test results to {results_path}")
+        
+        return results
+    
+    def generate_event_type_latency_analysis(self):
+        """Analyze latency by event type (Add vs Replace vs Delete)."""
+        logger.info("\n📊 Generating event type latency analysis...")
+        
+        fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+        
+        # Boxplot of latency by event type
+        ax = axes[0]
+        event_order = self.df['event_type'].value_counts().index.tolist()
+        data_to_plot = [self.df[self.df['event_type'] == et]['latency_us'].values for et in event_order]
+        
+        bp = ax.boxplot(data_to_plot, labels=event_order, patch_artist=True,
+                       boxprops=dict(facecolor='lightcoral', color='darkred'),
+                       medianprops=dict(color='darkred', linewidth=2),
+                       whiskerprops=dict(color='darkred'),
+                       capprops=dict(color='darkred'))
+        
+        ax.set_yscale('log')
+        ax.set_ylabel('Latency (μs, log scale)', fontsize=11)
+        ax.set_xlabel('Event Type', fontsize=11)
+        ax.set_title('Latency Distribution by Event Type', fontsize=12, fontweight='bold')
+        ax.grid(axis='y', alpha=0.3)
+        
+        # Add median values
+        for i, et in enumerate(event_order):
+            median = self.df[self.df['event_type'] == et]['latency_us'].median()
+            count = len(self.df[self.df['event_type'] == et])
+            ax.text(i+1, ax.get_ylim()[0] * 1.5, f'n={count:,}\nmd={median:.0f}μs', 
+                   ha='center', va='bottom', fontsize=9)
+        
+        # Table of statistics
+        ax = axes[1]
+        ax.axis('off')
+        
+        event_stats = self.df.groupby('event_type')['latency_us'].agg([
+            ('Count', 'count'),
+            ('Median', 'median'),
+            ('Mean', 'mean'),
+            ('P95', lambda x: np.percentile(x, 95))
+        ]).round(0)
+        event_stats['Count'] = event_stats['Count'].apply(lambda x: f'{int(x):,}')
+        event_stats = event_stats.reindex(event_order)
+        
+        table = ax.table(cellText=event_stats.values,
+                        rowLabels=event_stats.index,
+                        colLabels=event_stats.columns,
+                        cellLoc='right',
+                        loc='center',
+                        bbox=[0, 0.2, 1, 0.6])
+        table.auto_set_font_size(False)
+        table.set_fontsize(10)
+        table.scale(1, 2)
+        
+        ax.set_title('Event Type Statistics', fontsize=12, fontweight='bold', pad=20)
+        
+        plt.tight_layout()
+        output_path = self.figures_dir / "event_type_latency_analysis.png"
+        plt.savefig(output_path, dpi=300, bbox_inches='tight')
+        logger.info(f"  ✓ Saved to {output_path}")
+        plt.close()
+    
+    def generate_firm_category_analysis(self):
+        """Analyze HFT vs Traditional broker latency differences."""
+        logger.info("\n📊 Generating HFT vs Traditional broker analysis...")
+        
+        fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+        
+        # Boxplot comparison
+        ax = axes[0]
+        categories = self.df['firm_category'].value_counts().index.tolist()
+        data_to_plot = [self.df[self.df['firm_category'] == cat]['latency_us'].values for cat in categories]
+        
+        bp = ax.boxplot(data_to_plot, labels=categories, patch_artist=True,
+                       boxprops=dict(facecolor='steelblue', color='navy'),
+                       medianprops=dict(color='red', linewidth=2),
+                       whiskerprops=dict(color='navy'),
+                       capprops=dict(color='navy'))
+        
+        ax.set_yscale('log')
+        ax.set_ylabel('Latency (μs, log scale)', fontsize=11)
+        ax.set_xlabel('Firm Category', fontsize=11)
+        ax.set_title('HFT vs Traditional Broker Latencies', fontsize=12, fontweight='bold')
+        ax.grid(axis='y', alpha=0.3)
+        
+        for i, cat in enumerate(categories):
+            median = self.df[self.df['firm_category'] == cat]['latency_us'].median()
+            count = len(self.df[self.df['firm_category'] == cat])
+            ax.text(i+1, ax.get_ylim()[0] * 1.5, f'n={count:,}\nmd={median:.0f}μs',
+                   ha='center', va='bottom', fontsize=9)
+        
+        # Histogram overlay
+        ax = axes[1]
+        for cat in categories:
+            data = self.df[self.df['firm_category'] == cat]['latency_us'].values
+            ax.hist(np.log10(data), bins=50, alpha=0.6, label=cat, density=True)
+        
+        ax.set_xlabel('log₁₀(Latency in μs)', fontsize=11)
+        ax.set_ylabel('Density', fontsize=11)
+        ax.set_title('Latency Distribution by Firm Category', fontsize=12, fontweight='bold')
+        ax.legend()
+        ax.grid(axis='y', alpha=0.3)
+        
+        plt.tight_layout()
+        output_path = self.figures_dir / "firm_category_analysis.png"
+        plt.savefig(output_path, dpi=300, bbox_inches='tight')
+        logger.info(f"  ✓ Saved to {output_path}")
+        plt.close()
+        
+        # Generate summary table
+        cat_stats = self.df.groupby('firm_category')['latency_us'].agg([
+            ('Count', 'count'),
+            ('Median_μs', 'median'),
+            ('Mean_μs', 'mean'),
+            ('P10_μs', lambda x: np.percentile(x, 10)),
+            ('P90_μs', lambda x: np.percentile(x, 90))
+        ]).round(2)
+        cat_path = self.tables_dir / "firm_category_statistics.csv"
+        cat_stats.to_csv(cat_path)
+        logger.info(f"  ✓ Saved firm category statistics to {cat_path}")
+    
     def generate_all(self):
         """Generate all analytics and visualizations."""
         logger.info("=" * 80)
@@ -391,12 +580,20 @@ class LatencyAnalytics:
         self.generate_time_of_day_heatmap()
         self.generate_symbol_comparison()
         self.generate_event_type_distribution()
+        self.generate_event_type_latency_analysis()
+        self.generate_firm_category_analysis()
         
         logger.info("\n" + "=" * 80)
         logger.info("GENERATING SUMMARY TABLES")
         logger.info("=" * 80)
         
         self.generate_summary_tables()
+        
+        logger.info("\n" + "=" * 80)
+        logger.info("RUNNING STATISTICAL TESTS")
+        logger.info("=" * 80)
+        
+        self.run_statistical_tests()
         
         logger.info("\n" + "=" * 80)
         logger.info("✓ ANALYTICS GENERATION COMPLETE")

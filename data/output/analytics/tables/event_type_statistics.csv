@@ -1,4 +1,4 @@
-event_type,Count,Percentage,Median_μs
+event_type,Count,Pct,Median_μs
 Replace,11038166,93.06,16912.55
 AddOrderMPID,684963,5.77,3557755.4
 Delete,137899,1.16,4248601.75
