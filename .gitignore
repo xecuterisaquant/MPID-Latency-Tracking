@@ -61,6 +61,7 @@ Thumbs.db
 
 # Report outputs
 reports/*.html
+!reports/report_professional.html
 reports/*.pdf
 !reports/report.Rmd
 
