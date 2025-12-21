@@ -1,0 +1,69 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Data files (large files - don't commit to git)
+*.parquet
+*.parquet2
+*.pcap
+*.pcap.zst
+*.csv
+data/extracted/
+data/es/
+data/output/
+results/
+
+# Keep example/small files
+!data/pcap/*.summary.csv
+
+# Logs
+*.log
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Report outputs
+reports/*.html
+reports/*.pdf
+!reports/report.Rmd
+
+# Temporary files
+*.tmp
+*.bak
