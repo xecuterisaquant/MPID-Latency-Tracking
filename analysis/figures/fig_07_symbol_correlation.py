@@ -17,25 +17,37 @@ from analysis.utils.plotting import setup_figure, save_figure
 def generate_figure_07(df: pd.DataFrame, output_dir: Path = FIGURES_DIR) -> None:
     """
     Generate symbol correlation heatmap
+    OPTIMIZED: Fast sampling strategy for large datasets
     """
     print("📊 Generating Figure 07: Symbol/Asset Correlation Matrix...")
+    print(f"  Dataset size: {len(df):,} rows")
     
-    # Create minute-level timestamps
-    df['minute'] = pd.to_datetime(df['nasdaq_time_ns'], unit='ns').dt.floor('1min')
+    # AGGRESSIVE SAMPLING: 50K rows is plenty for correlation
+    print("  Sampling for correlation (50K rows)...")
+    df_sample = df.sample(min(50_000, len(df)), random_state=42)
     
-    # Sample every 10th minute for performance
-    sample_minutes = df['minute'].unique()[::10]
-    df_sample = df[df['minute'].isin(sample_minutes)]
+    # Create 5-minute bins (faster than 1-minute)
+    print("  Creating time bins...")
+    df_sample['time_bin'] = pd.to_datetime(df_sample['nasdaq_time_ns'], unit='ns').dt.floor('5min')
     
-    # Pivot: rows=minutes, columns=symbols, values=median latency
+    # Pivot: rows=time bins, columns=symbols, values=median latency
+    print("  Computing pivot table...")
     pivot_df = df_sample.pivot_table(
-        index='minute',
+        index='time_bin',
         columns='symbol',
         values='latency_ms',
         aggfunc='median'
     )
     
+    # Drop symbols with insufficient data
+    pivot_df = pivot_df.dropna(thresh=int(len(pivot_df) * 0.3), axis=1)
+    
+    if pivot_df.shape[1] < 2:
+        print("  ⚠️  Insufficient data - skipping")
+        return
+    
     # Spearman correlation
+    print("  Computing correlations...")
     corr_matrix = pivot_df.corr(method='spearman')
     
     # Create figure

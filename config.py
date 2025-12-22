@@ -17,8 +17,8 @@ PROJECT_ROOT = Path(__file__).parent.resolve()
 DATA_ROOT = PROJECT_ROOT / "data"
 
 # Input data directories
-ES_DATA_DIR = DATA_ROOT / "itch"  # ES futures trades
-NASDAQ_DATA_DIR = DATA_ROOT / "extracted"  # NASDAQ ITCH events
+ES_DATA_DIR = DATA_ROOT / "es"  # ES futures trades
+NASDAQ_DATA_DIR = DATA_ROOT / "nasdaq"  # NASDAQ ITCH events
 PCAP_DATA_DIR = DATA_ROOT / "pcap"  # Raw PCAP files (archive)
 
 # Output directories
@@ -66,7 +66,8 @@ CONTRACTS = {
 # Security IDs from CME
 ES_SECURITY_IDS = {
     5002: 'ESH25',      # March E-mini S&P 500
-    5003: 'ESM25',      # June E-mini S&P 500
+    4916: 'ESM25',      # June E-mini S&P 500 (actual ID in data)
+    5003: 'ESM25',      # June E-mini S&P 500 (alternate ID, may not be used)
     42005347: 'MES',    # Micro E-mini
 }
 

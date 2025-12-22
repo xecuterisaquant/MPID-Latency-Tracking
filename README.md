@@ -11,55 +11,77 @@
 
 This project measures how fast NASDAQ market makers react to CME E-mini S&P 500 (ES) futures trades using high-frequency market microstructure data. We analyze cross-market latencies spanning **March 10-21, 2025** across **two futures contracts** (March ESH25 and June ESM25), tracking reactions in **10 major equity symbols**.
 
-### Key Findings (Updated Analysis Period: 3/10-3/21/2025)
+### Project Status: DATA COMPLETE | FIGURES PENDING
 
-**Market Concentration**
-- **95.7% of MPID-attributed activity** dominated by just 3 firms: Wolverine Trading, Wedbush Securities, and JP Morgan
-- Top 12 firms account for >99% of observable market-making activity
-- Famous HFT firms (Citadel, Virtu, IMC) show minimal participation with sporadic multi-second latencies
+**✅ Completed:**
+- ✅ NASDAQ data preprocessing: 10 days, 4.45 GB filtered (750M+ events)
+- ✅ Latency pipeline: 93,031,377 observations generated in 9min 24sec
+- ✅ Data validation: All timestamps verified, comprehensive statistics generated
+- ✅ Figure 1: Distribution plot complete (full 93M dataset)
 
-**Speed Performance**
-- **~96ms median latency** for Active Fast Market Makers (full Chicago → Carteret pipeline including all network + processing layers)
-- **48x speed gap**: Active Fast MMs (96ms) vs Sporadic/Slow HFT (4,578ms) 
-- **26x symbol variation**: QQQ (35.6ms) vs META (929ms) medians
-- Sub-100ms latencies physically reasonable for cross-market infrastructure (Chicago CME → New Jersey NASDAQ)
+**⚠️ Blocked:**
+- ❌ Figures 2-9: Memory constraints (dataset = 15.68 GB in RAM vs 16 GB available)
+- ❌ MPID categorization: Python function lookups too slow on 93M rows
+- ⚠️ Need: Individual figure scripts with proper sampling strategy
 
-**Statistical Validation**
-- Kruskal-Wallis tests: All hypotheses p < 0.001 with medium-to-large effect sizes
-- MPID explains 10.3% of variance (ε² = 0.103) - medium-large effect
-- Results robust across sample sizes from 10K to 12M+ observations
-- Temporal clustering acknowledged but doesn't invalidate comparative findings
+### Key Dataset Statistics
+
+**93,031,377 Total Observations**
+- ESH25 (March contract): 60,428,850 obs (64.9%)
+- ESM25 (June contract): 32,602,527 obs (35.1%)
+- **Median latency:** 147.2 ms
+- **Mean latency:** 625.8 ms
+- **52 unique MPIDs** tracked across **10 symbols**
+
+**Top 3 Firms (95.7% of activity):**
+- WBPX (Wedbush): 33,376,802 obs (35.9%)
+- WCHV (Wolverine): 32,138,992 obs (34.5%)
+- JPMS (JP Morgan): 24,726,515 obs (26.6%)
 
 ---
 
 ## Quick Start
 
+### Option A: Use Pre-Processed Data (CURRENT STATUS)
+
 ```bash
-# 1. Setup environment
+# Environment setup
 python -m venv .venv
-.venv\Scripts\activate  # Windows (use source .venv/bin/activate on Linux/Mac)
+.venv\Scripts\activate
 pip install -r requirements.txt
 
-# 2. Run multi-day pipeline (processes all dates, both contracts)
-python analysis/latency_pipeline_multiday.py \
-    --es-dir data/itch \
-    --nasdaq-dir data/extracted \
-    --start-date 2025-03-10 \
-    --end-date 2025-03-21 \
-    --contracts ESH25 ESM25 \
-    --output data/output/latencies_combined.parquet
+# Current outputs available:
+# - outputs/latencies/latencies_multiday_combined.parquet (93M observations, 1.45 GB)
+# - outputs/statistics/ (comprehensive statistics)
+# - outputs/figures/fig_01_full_dataset.png (distribution plot)
 
-# 3. Generate all analytics (9 figures + statistical tables)
-python analysis/run_all_analytics.py \
-    --data data/output/latencies_combined.parquet \
-    --output data/output/analytics/figures
+# Generate statistics
+python quick_stats.py
 
-# Results saved to:
-#   - Figures: data/output/analytics/figures/
-#   - Tables: data/output/analytics/tables/
+# Generate individual figures (Figures 2-9 pending - see PROJECT_CONTEXT.md)
+python fig02.py  # Firm categories (in progress)
 ```
 
-**Performance:** Optimized with Numba JIT compilation, smart sampling, and chunked processing for week-long datasets
+### Option B: Re-run Full Pipeline from Raw Data
+
+```bash
+# 1. Preprocess NASDAQ data (10 days)
+python batch_preprocess.py
+
+# 2. Run latency pipeline (both contracts, all days)
+python run_pipeline.py
+
+# 3. Combine outputs
+python combine_outputs.py
+
+# 4. Generate statistics
+python quick_stats.py
+```
+
+**Performance:** 
+- Preprocessing: ~5-10 minutes per day
+- Pipeline: 9 minutes 24 seconds for 10 days (93M observations)
+- Statistics: < 1 minute on full dataset
 
 ---
 
@@ -67,53 +89,47 @@ python analysis/run_all_analytics.py \
 
 ```
 MPID-Latency-Tracking/
-├── analysis/                          # Analytics pipeline
-│   ├── latency_pipeline_multiday.py   # 🆕 Multi-day/multi-contract processor
-│   ├── latency_join_pipeline.py       # Original single-day pipeline
-│   ├── run_all_analytics.py           # 🆕 Master orchestrator
-│   ├── figures/                       # 🆕 Modular figure generation
-│   │   ├── fig_01_distribution.py     # Overall latency distribution
-│   │   ├── fig_02_firm_categories.py  # Firm category comparison
-│   │   ├── fig_03_top_firms.py        # Top firms analysis
-│   │   ├── fig_04_symbols.py          # Symbol-level patterns
-│   │   ├── fig_05_time_of_day.py      # Hourly variations
-│   │   ├── fig_06_firm_correlation.py # 🆕 Firm latency correlations
-│   │   ├── fig_07_symbol_correlation.py # 🆕 Cross-symbol correlations
-│   │   ├── fig_08_weekly_heatmap.py   # 🆕 Weekly trading patterns
-│   │   └── fig_09_contract_comparison.py # 🆕 March vs June contracts
-│   ├── stats/                         # 🆕 Statistical analysis
-│   │   └── comprehensive_stats.py     # Kruskal-Wallis, pairwise, robustness
-│   └── utils/                         # 🆕 Optimized utilities
-│       ├── plotting.py                # Numba-optimized plotting functions
-│       └── stats.py                   # High-performance statistical functions
+├── analysis/                          # Analytics pipeline modules
+│   ├── latency_pipeline_multiday.py   # Multi-day processor
+│   ├── preprocess_nasdaq.py           # NASDAQ data filtering
+│   └── figures/                       # Figure generation modules (legacy)
 ├── mpid_latency/                      # Core matching engine
 │   ├── ingest.py                      # ES futures data loading
 │   ├── parser.py                      # NASDAQ ITCH parser
 │   └── messages.py                    # Binary message structures
 ├── mpid_lookup/                       # Firm categorization
 │   ├── mpid_to_firm.py                # MPID → firm name + category
-│   └── mpidlist.txt                   # MPID registry
+│   └── mpidlist.txt                   # MPID registry (52 firms)
 ├── data/
-│   ├── itch/                          # ES futures trades (Parquet/CSV)
-│   ├── extracted/                     # NASDAQ ITCH events (Parquet)
-│   ├── pcap/                          # Raw NASDAQ PCAP (archive)
-│   └── output/
-│       ├── latencies_combined.parquet # 🆕 Multi-day combined results
-│       ├── latencies_YYYYMMDD.parquet # Daily incremental saves
-│       └── analytics/
-│           ├── figures/               # 9 publication-quality figures (300 DPI)
-│           └── tables/                # Statistical test results (CSV)
-├── config.py                          # 🆕 Centralized configuration
-├── tests/                             # Test suite
-└── README.md                          # 🆕 This comprehensive report
+│   ├── es/                            # ES futures trades (Parquet/CSV)
+│   ├── nasdaq/                        # NASDAQ ITCH raw PCAP files
+│   │   ├── extracted/                 # Parquet-converted ITCH events
+│   │   └── extracted_md/              # Preprocessed market-hours only
+├── outputs/                           # ✨ NEW: Organized outputs
+│   ├── latencies/                     # Latency measurement results
+│   │   ├── latencies_multiday_combined.parquet  # 93M observations
+│   │   └── latencies_YYYYMMDD_*.parquet         # Daily files (20 files)
+│   ├── statistics/                    # Analysis outputs
+│   │   └── quick_summary.txt          # Comprehensive statistics
+│   └── figures/                       # Publication-quality figures
+│       └── fig_01_full_dataset.png    # Distribution (complete)
+├── reports/                           # Academic report
+│   └── report.md                      # Full manuscript
+├── config.py                          # Configuration
+├── batch_preprocess.py                # Batch preprocessing script
+├── run_pipeline.py                    # Main pipeline runner
+├── combine_outputs.py                 # Combine daily results
+├── quick_stats.py                     # Statistics generator
+├── fig01_full_memory_optimized.py     # Figure 1 (working)
+├── fig02.py                           # Figure 2 (in progress)
+├── requirements.txt                   # Python dependencies
+└── README.md                          # This file
 ```
 
-**🆕 New in Multi-Day/Multi-Contract Version:**
-- Modular analytics architecture (11 separate figure scripts)
-- Optimized utilities with Numba JIT compilation
-- Multi-contract support (March ESH25 + June ESM25)
-- Comprehensive statistical analysis suite
-- Week-long processing capability with memory optimization
+**Key Files:**
+- `outputs/latencies/latencies_multiday_combined.parquet`: 93M observations, 1.45 GB
+- `outputs/statistics/quick_summary.txt`: Comprehensive statistics
+- `outputs/figures/fig_01_full_dataset.png`: Distribution plot (complete)
 
 ---
 

@@ -22,8 +22,10 @@ from mpid_lookup.mpid_to_firm import get_firm_name, get_firm_category
 def run_comprehensive_analysis(df: pd.DataFrame, output_dir: Path = TABLES_DIR) -> Dict:
     """
     Run all statistical tests and save results
+    OPTIMIZED: Uses sampling for expensive operations
     """
     print("\n🔬 Running Comprehensive Statistical Analysis...")
+    print(f"  Dataset size: {len(df):,} rows")
     
     # Add firm info if not present
     if 'firm_name' not in df.columns:
@@ -112,13 +114,15 @@ def run_comprehensive_analysis(df: pd.DataFrame, output_dir: Path = TABLES_DIR) 
     # 4. Robustness Tests
     # ========================================================================
     print("\n🔄 Running robustness tests across sample sizes...")
+    # OPTIMIZED: Limit max sample size to 1M for speed
     sample_sizes = [10_000, 50_000, 100_000, 500_000, 1_000_000]
     
     # Filter to available sample sizes
-    max_size = len(df)
+    max_size = min(len(df), 1_000_000)  # Cap at 1M even if more data available
     sample_sizes = [s for s in sample_sizes if s <= max_size]
     
     if sample_sizes:
+        print(f"  Testing sample sizes: {sample_sizes}")
         robustness_df = run_robustness_tests(df, 'mpid', 'latency_ms', sample_sizes=sample_sizes)
         robustness_df.to_csv(output_dir / 'robustness_tests.csv', index=False)
         print(f"  ✓ Saved: robustness_tests.csv (tested {len(sample_sizes)} sample sizes)")

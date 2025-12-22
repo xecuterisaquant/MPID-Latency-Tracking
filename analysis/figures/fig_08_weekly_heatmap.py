@@ -17,16 +17,24 @@ from analysis.utils.plotting import setup_figure, save_figure
 def generate_figure_08(df: pd.DataFrame, output_dir: Path = FIGURES_DIR) -> None:
     """
     Generate weekly trading heatmap (hour × day-of-week)
+    OPTIMIZED: Fast aggregation with sampling
     """
     print("📊 Generating Figure 08: Weekly Trading Heatmap...")
+    print(f"  Dataset size: {len(df):,} rows")
+    
+    # FAST SAMPLING: Use 200K rows for heatmap (representative)
+    print("  Sampling for heatmap (200K rows)...")
+    df_sample = df.sample(min(200_000, len(df)), random_state=42)
     
     # Create datetime features
-    df['datetime'] = pd.to_datetime(df['nasdaq_time_ns'], unit='ns')
-    df['hour'] = df['datetime'].dt.hour
-    df['day_of_week'] = df['datetime'].dt.day_name()
+    print("  Extracting time features...")
+    df_sample['datetime'] = pd.to_datetime(df_sample['nasdaq_time_ns'], unit='ns')
+    df_sample['hour'] = df_sample['datetime'].dt.hour
+    df_sample['day_of_week'] = df_sample['datetime'].dt.day_name()
     
     # Pivot for heatmap
-    heatmap_data = df.pivot_table(
+    print("  Computing heatmap data...")
+    heatmap_data = df_sample.pivot_table(
         index='hour',
         columns='day_of_week',
         values='latency_ms',

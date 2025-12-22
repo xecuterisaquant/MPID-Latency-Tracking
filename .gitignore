@@ -68,3 +68,8 @@ reports/*.pdf
 # Temporary files
 *.tmp
 *.bak
+
+# Project outputs
+outputs/
+*.parquet
+pipeline_output.log

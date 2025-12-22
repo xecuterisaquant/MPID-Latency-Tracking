@@ -34,19 +34,19 @@ def generate_figure_01(df: pd.DataFrame, output_dir: Path = FIGURES_DIR) -> None
     ax1.grid(True, alpha=0.3)
     add_summary_stats_text(ax1, latency_ms, x=0.97, y=0.97)
     
-    # Panel 2: Log scale
-    log_latency = np.log10(latency_ms + 1)
-    ax2.hist(log_latency, bins=100, alpha=0.75, edgecolor='black', linewidth=0.5, color='#e74c3c')
-    ax2.set_xlabel('log₁₀(Latency + 1) (ms)', fontsize=12, fontweight='bold')
+    # Panel 2: Log scale (proper log x-axis)
+    ax2.hist(latency_ms + 1, bins=np.logspace(0, 4, 100), alpha=0.75, edgecolor='black', linewidth=0.5, color='#e74c3c')
+    ax2.set_xscale('log')
+    ax2.set_xlabel('Latency (ms, log scale)', fontsize=12, fontweight='bold')
     ax2.set_ylabel('Count', fontsize=12, fontweight='bold')
     ax2.set_title('Overall Latency Distribution (Log Scale)', fontsize=14, fontweight='bold', pad=15)
-    ax2.grid(True, alpha=0.3)
+    ax2.grid(True, alpha=0.3, which='both')
     
-    # Add median/mean lines to log plot
-    median_log = np.log10(np.median(latency_ms) + 1)
-    mean_log = np.log10(np.mean(latency_ms) + 1)
-    ax2.axvline(median_log, color='green', linestyle='--', linewidth=2, label=f'Median: {np.median(latency_ms):.1f} ms')
-    ax2.axvline(mean_log, color='orange', linestyle='--', linewidth=2, label=f'Mean: {np.mean(latency_ms):.1f} ms')
+    # Add median/mean lines
+    median_val = np.median(latency_ms)
+    mean_val = np.mean(latency_ms)
+    ax2.axvline(median_val, color='green', linestyle='--', linewidth=2, label=f'Median: {median_val:.1f} ms')
+    ax2.axvline(mean_val, color='orange', linestyle='--', linewidth=2, label=f'Mean: {mean_val:.1f} ms')
     ax2.legend(fontsize=10)
     
     fig.suptitle(f'MPID Latency Distribution (n = {len(df):,})', 
