@@ -126,7 +126,7 @@ MPID-Latency-Tracking/
 - **Period**: March 10-21, 2025 (12 trading days)
 - **Coverage**: 6:00 AM - 4:30 PM ET daily
 - **Format**: Parquet/CSV with nanosecond timestamps
-- **Source**: QuantConnect/LEAN ES historical data
+- **Source**: Databento CME MDP 3.0 PCAP data
 
 **2. NASDAQ ITCH Events (NASDAQ Carteret, NJ)**
 - **Protocol**: TotalView-ITCH 5.0 
@@ -134,7 +134,7 @@ MPID-Latency-Tracking/
 - **Symbols**: SPY, QQQ, IWM, AAPL, MSFT, GOOG, AMZN, META, NVDA, TSLA
 - **Period**: March 10-21, 2025
 - **Coverage**: 8:15 AM - 4:00 PM ET (market hours)
-- **Source**: NASDAQ PCAP files extracted to Parquet
+- **Source**: Databento XNAS TotalView-ITCH 5.0 data extracted to Parquet
 
 ### Latency Measurement
 
