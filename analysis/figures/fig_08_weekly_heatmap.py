@@ -22,24 +22,19 @@ def generate_figure_08(df: pd.DataFrame, output_dir: Path = FIGURES_DIR) -> None
     print("📊 Generating Figure 08: Weekly Trading Heatmap...")
     print(f"  Dataset size: {len(df):,} rows")
     
-    # FAST SAMPLING: Use 200K rows for heatmap (representative)
-    print("  Sampling for heatmap (200K rows)...")
-    df_sample = df.sample(min(200_000, len(df)), random_state=42)
-    
+    # Use full dataset: aggregate median latency per hour/day without sampling
+    print("  Using all data for heatmap (no sampling)...")
+    df_top = df.copy()
     # Create datetime features
     print("  Extracting time features...")
-    df_sample['datetime'] = pd.to_datetime(df_sample['nasdaq_time_ns'], unit='ns')
-    df_sample['hour'] = df_sample['datetime'].dt.hour
-    df_sample['day_of_week'] = df_sample['datetime'].dt.day_name()
-    
-    # Pivot for heatmap
-    print("  Computing heatmap data...")
-    heatmap_data = df_sample.pivot_table(
-        index='hour',
-        columns='day_of_week',
-        values='latency_ms',
-        aggfunc='median'
-    )
+    df_top['datetime'] = pd.to_datetime(df_top['nasdaq_time_ns'], unit='ns')
+    df_top['hour'] = df_top['datetime'].dt.hour
+    df_top['day_of_week'] = df_top['datetime'].dt.day_name()
+
+    # Aggregate median latency per (hour, day_of_week) then pivot
+    print("  Computing heatmap data (aggregating median latency per hour/day)...")
+    grouped = df_top.groupby(['hour', 'day_of_week'])['latency_ms'].median().reset_index()
+    heatmap_data = grouped.pivot(index='hour', columns='day_of_week', values='latency_ms')
     
     # Reorder days
     day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']

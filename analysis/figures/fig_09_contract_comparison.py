@@ -12,7 +12,7 @@ import sys
 
 sys.path.append(str(Path(__file__).parent.parent.parent))
 from config import FIGURES_DIR, FIGURE_DPI, FIGURE_WIDTH, FIGURE_HEIGHT
-from analysis.utils.plotting import setup_figure, save_figure, smart_sample
+from analysis.utils.plotting import setup_figure, save_figure
 
 def generate_figure_09(df: pd.DataFrame, output_dir: Path = FIGURES_DIR) -> None:
     """
@@ -25,8 +25,9 @@ def generate_figure_09(df: pd.DataFrame, output_dir: Path = FIGURES_DIR) -> None
         print("⚠️  Contract column not found - skipping Figure 09")
         return
     
-    # Sample for performance
-    plot_df = smart_sample(df, max_size=500_000, stratify_col='contract')
+    # Use full dataset (no sampling)
+    print("  Using full dataset for contract comparison (no sampling)...")
+    plot_df = df.copy()
     
     # Create figure with multiple panels
     fig, axes = plt.subplots(2, 2, figsize=(FIGURE_WIDTH * 2, FIGURE_HEIGHT * 2), dpi=FIGURE_DPI)

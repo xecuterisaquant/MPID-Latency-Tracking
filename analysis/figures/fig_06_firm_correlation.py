@@ -19,7 +19,7 @@ from mpid_lookup.mpid_to_firm import get_firm_name
 def generate_figure_06(df: pd.DataFrame, output_dir: Path = FIGURES_DIR, top_n: int = TOP_N_FIRMS) -> None:
     """
     Generate firm correlation heatmap
-    OPTIMIZED: Aggressive sampling to prevent slowdowns on large datasets
+    Uses all matching rows: aggregates by 5-minute bins across the full dataset
     """
     print(f"📊 Generating Figure 06: Firm Correlation Matrix (Top {top_n})...")
     print(f"  Dataset size: {len(df):,} rows")
@@ -33,22 +33,15 @@ def generate_figure_06(df: pd.DataFrame, output_dir: Path = FIGURES_DIR, top_n: 
     top_firms = df['firm_name'].value_counts().head(top_n).index.tolist()
     print(f"  Top {top_n} firms: {', '.join(top_firms[:3])}...")
     
-    # AGGRESSIVE SAMPLING: Take only 100K rows for correlation (much faster)
-    print("  Sampling for correlation analysis (100K rows)...")
-    df_sample = df[df['firm_name'].isin(top_firms)].sample(min(100_000, len(df)), random_state=42)
-    
-    # Pivot to create firm x time matrix (using 5-minute bins for speed)
-    print("  Creating time bins...")
-    df_sample['time_bin'] = pd.to_datetime(df_sample['nasdaq_time_ns'], unit='ns').dt.floor('5min')
-    
-    # Pivot table: rows=time bins, columns=firms, values=median latency
-    print("  Computing pivot table...")
-    pivot_df = df_sample.pivot_table(
-        index='time_bin',
-        columns='firm_name',
-        values='latency_ms',
-        aggfunc='median'
-    )
+    # Use all data for correlation: filter to top firms, bin times, then aggregate
+    print("  Using all data for correlation analysis (no sampling)...")
+    df_top = df[df['firm_name'].isin(top_firms)].copy()
+    print("  Creating time bins and aggregating median latency per firm per bin...")
+    df_top['time_bin'] = pd.to_datetime(df_top['nasdaq_time_ns'], unit='ns').dt.floor('5min')
+
+    # Group (time_bin, firm) and compute median latency, then pivot
+    grouped = df_top.groupby(['time_bin', 'firm_name'])['latency_ms'].median().reset_index()
+    pivot_df = grouped.pivot(index='time_bin', columns='firm_name', values='latency_ms')
     
     # Drop columns with too many NaNs (need at least 30% coverage)
     min_coverage = 0.3

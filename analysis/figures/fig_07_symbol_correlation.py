@@ -17,27 +17,20 @@ from analysis.utils.plotting import setup_figure, save_figure
 def generate_figure_07(df: pd.DataFrame, output_dir: Path = FIGURES_DIR) -> None:
     """
     Generate symbol correlation heatmap
-    OPTIMIZED: Fast sampling strategy for large datasets
+    Uses all matching rows: aggregates by 5-minute bins across the full dataset
     """
     print("📊 Generating Figure 07: Symbol/Asset Correlation Matrix...")
     print(f"  Dataset size: {len(df):,} rows")
     
-    # AGGRESSIVE SAMPLING: 50K rows is plenty for correlation
-    print("  Sampling for correlation (50K rows)...")
-    df_sample = df.sample(min(50_000, len(df)), random_state=42)
-    
-    # Create 5-minute bins (faster than 1-minute)
-    print("  Creating time bins...")
-    df_sample['time_bin'] = pd.to_datetime(df_sample['nasdaq_time_ns'], unit='ns').dt.floor('5min')
-    
-    # Pivot: rows=time bins, columns=symbols, values=median latency
-    print("  Computing pivot table...")
-    pivot_df = df_sample.pivot_table(
-        index='time_bin',
-        columns='symbol',
-        values='latency_ms',
-        aggfunc='median'
-    )
+    # Use all data for correlation: bin times and aggregate median latency per symbol
+    print("  Using all data for correlation analysis (no sampling)...")
+    df_top = df.copy()
+    print("  Creating time bins and aggregating median latency per symbol per bin...")
+    df_top['time_bin'] = pd.to_datetime(df_top['nasdaq_time_ns'], unit='ns').dt.floor('5min')
+
+    # Group (time_bin, symbol) and compute median latency, then pivot
+    grouped = df_top.groupby(['time_bin', 'symbol'])['latency_ms'].median().reset_index()
+    pivot_df = grouped.pivot(index='time_bin', columns='symbol', values='latency_ms')
     
     # Drop symbols with insufficient data
     pivot_df = pivot_df.dropna(thresh=int(len(pivot_df) * 0.3), axis=1)
@@ -54,9 +47,9 @@ def generate_figure_07(df: pd.DataFrame, output_dir: Path = FIGURES_DIR) -> None
     fig, ax = setup_figure(figsize=(FIGURE_WIDTH * 1.2, FIGURE_HEIGHT * 1.2))
     
     # Heatmap
-    sns.heatmap(corr_matrix, annot=True, fmt='.2f', cmap='coolwarm', center=0,
+    sns.heatmap(corr_matrix, annot=True, fmt='.2f', cmap='coolwarm', center=0.5,
                 square=True, linewidths=0.5, cbar_kws={'label': 'Spearman ρ'},
-                vmin=-1, vmax=1, ax=ax)
+                vmin=0, vmax=1, ax=ax)
     
     ax.set_title('Symbol Latency Correlation Matrix\nSpearman ρ of Median Latencies Across Time',
                  fontsize=15, fontweight='bold', pad=20)
