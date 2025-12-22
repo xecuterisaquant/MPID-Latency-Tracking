@@ -140,35 +140,35 @@ NASDAQ assigns 4-character MPIDs to registered market participants. Attribution 
 5. **Symbol filtering:** Restrict to top N symbols by message volume (scope control)
 
 **Data Volume:**
-- ES trades per day: [TBD] (estimate ~50,000-100,000 for liquid hours)
-- NASDAQ MPID messages per day: [TBD] (estimate ~millions for top symbols)
-- Total dataset size: [TBD GB]
+- ES trades per day: ~440k (4,400,631 total across the 10 analyzed trading days)
+- NASDAQ MPID messages per day: ~95M (947M total across the 10 analyzed trading days)
+- Total dataset size: ~5.93 GB (5.85 GB NASDAQ MPID exports across 20250310–20250321 + 0.08 GB ES trades)
 
 ### 3.3 Symbol Selection
 
-To ensure statistical power while limiting computational burden, we focus on highly liquid symbols with strong correlation to ES futures:
+A DuckDB aggregation over the Parquet exports (10 trading days, 2025-03-10 through 2025-03-21) surfaced **947,041,721 MPID-attributed NASDAQ messages** spanning **11,293 symbols**. Flow is extremely concentrated: the ten busiest tickers account for **252,600,786 events (26.7%)**, so trimming the universe to these symbols reduces runtime while preserving the bulk of actionable latency observations tied to ES shocks.
 
-**Target symbols (preliminary):**
-- **QQQ:** Invesco QQQ Trust (NASDAQ-100 ETF) — direct index exposure
-- **IWM:** iShares Russell 2000 ETF — broad small-cap exposure
-- **TSLA:** Tesla Inc. — highly traded equity with strong retail/institutional interest
-- [TBD: Additional symbols based on message volume analysis]
+**Selected symbols and share of MPID-tagged flow:**
+- `QQQ` — 53.9M events (5.69%): NASDAQ-100 ETF that tracks ES closely and anchors index-arb activity.
+- `SPY` — 36.5M (3.86%): S&P 500 ETF, strongest notional overlap with ES futures.
+- `IWM` — 26.0M (2.75%): Russell 2000 ETF to capture small-cap legs used in relative-value baskets.
+- `TSLA` — 22.5M (2.38%): Single-name with outsized retail flow and rapid quote revisions.
+- `PLTR` — 21.0M (2.22%) and `NVDA` — 20.9M (2.21%): AI-complex leaders that often react immediately to macro shocks.
+- `VOO` — 19.8M (2.09%), `IVV` — 18.6M (1.97%), `XLK` — 17.4M (1.84%), `AAPL` — 15.8M (1.67%): Additional index ETFs and megacaps supplying depth across growth and tech exposures.
 
-**Selection criteria:**
-1. High average daily trading volume (> 10M shares/day)
-2. Presence in multiple indices (to maximize ES correlation)
-3. Active MPID participation (verified via preliminary data inspection)
+This basket balances **broad ETFs (QQQ, SPY, IWM, VOO, IVV, XLK)** and **iconic single names (TSLA, PLTR, NVDA, AAPL)**, ensuring that every ES stimulus has ample downstream NASDAQ liquidity across multiple market segments. Symbols outside the top decile contribute marginal incremental coverage yet materially increase join cost, so they are omitted from the baseline run and reserved for follow-on robustness tests.
 
 ### 3.4 MPID Selection
 
-We rank MPIDs by total message activity (sum of add/cancel/replace events) across selected symbols and select the top K participants for detailed analysis.
+The same aggregation revealed **88 distinct MPIDs** with non-null attribution. Activity is even more concentrated than on the symbol axis: the top three MPIDs generate **96.3%** of all tagged messages, confirming that a handful of wholesalers dominate attributed NASDAQ flow during the study window.
 
-**Rationale:**  
-High-activity MPIDs are more likely to be professional liquidity providers with infrastructure capable of fast reactions. This introduces **survivorship bias** (we observe only successful, active participants) but ensures statistical significance.
+**Top MPIDs retained for latency measurement (share of sample):**
+- `WBPX` — 536.6M events (56.7%): Primary conduit for wholesale internalization flow; saturates every selected symbol.
+- `JPMS` — 233.6M (24.7%): JPMorgan’s broker-dealer desk, providing institutional routing and ETF risk transfers.
+- `WCHV` — 141.7M (15.0%): Second wholesale affiliate with comparable symbol coverage to WBPX.
+- `VIRT` — 10.9M (1.15%), `GSCO` — 3.7M (0.40%), `FLTG` — 3.2M (0.33%), `UBSS` — 2.6M (0.28%), `ETMM` — 1.9M (0.20%), `FLTU` — 1.4M (0.14%), `SGAS` — 1.2M (0.13%): Additional electronic market makers that, while individually small, provide diversity of infrastructure and quoting styles.
 
-**Preliminary MPID list (to be updated):**
-- [TBD: Top 10-20 MPIDs by message count]
-- Examples: NITE (Virtu), ARCA (NYSE Arca), DRCTEDGE, BATS, etc.
+Restricting analysis to this MPID set keeps **98.9%** of Replace/Add/Delete messages observed in the selected symbols (Replace dominates with 96.6% of events, Add with 2.4%, Delete with 1.0%). Focusing on the largest venues maximizes statistical power for per-MPID latency distributions while acknowledging the survivorship bias introduced by MPID attribution in TotalView data. Remaining MPIDs are tracked for sanity checks but excluded from the primary latency join to avoid noisy, thin-sample estimates.
 
 ### 3.5 Temporal Coverage
 
@@ -634,7 +634,7 @@ This study provides direct empirical measurement of reaction latencies for NASDA
 ### 7.4 Reproducibility
 
 All code and data processing scripts are available at:  
-**GitHub repository:** [TBD: insert repository URL]
+**GitHub repository:** https://gitlab.engr.illinois.edu/fin556_algo_market_micro_fall_2025/fin556_algo_market_micro_fall_2025_07/group_07_project
 
 **File structure:**
 - `message_extraction/`: PCAP parsing and ITCH/MDP decoding
@@ -752,92 +752,4 @@ def compute_latencies(es_trades, nasdaq_messages, symbols, mpids):
     
     return pd.DataFrame(results)
 ```
-
-### C. Additional Tables and Figures
-
-**Table A1: Data Coverage Summary**
-
-| Date | ES Trades | NASDAQ Messages | MPID Messages | Matched Pairs |
-|------|-----------|-----------------|---------------|---------------|
-| [Date 1] | [TBD] | [TBD] | [TBD] | [TBD] |
-| [Date 2] | [TBD] | [TBD] | [TBD] | [TBD] |
-| ... | ... | ... | ... | ... |
-| **Total** | **[TBD]** | **[TBD]** | **[TBD]** | **[TBD]** |
-
-**Table A2: Symbol-MPID Interaction Matrix (Observation Counts)**
-
-|  | MPID1 | MPID2 | MPID3 | ... | MPIDK |
-|--|-------|-------|-------|-----|-------|
-| **QQQ** | [TBD] | [TBD] | [TBD] | ... | [TBD] |
-| **IWM** | [TBD] | [TBD] | [TBD] | ... | [TBD] |
-| **TSLA** | [TBD] | [TBD] | [TBD] | ... | [TBD] |
-| ... | ... | ... | ... | ... | ... |
-
 ---
-
-**End of Report**
-
----
-
-**Compilation Instructions (LaTeX/PDF Generation):**
-
-To convert this Markdown report to a professional PDF:
-
-1. **Using Pandoc with LaTeX:**
-   ```bash
-   pandoc report.md -o report.pdf \
-       --pdf-engine=xelatex \
-       --variable geometry:margin=1in \
-       --variable fontsize=11pt \
-       --variable documentclass=article \
-       --number-sections \
-       --toc \
-       --bibliography=references.bib \
-       --csl=chicago-author-date.csl
-   ```
-
-2. **Using R Markdown:**
-   - Add YAML header:
-   ```yaml
-   ---
-   title: "High-Frequency Liquidity Provider Response Latency to External Price Shocks"
-   author: "[Your Name]"
-   date: "December 20, 2025"
-   output:
-     pdf_document:
-       toc: true
-       number_sections: true
-       fig_caption: true
-       keep_tex: true
-   bibliography: references.bib
-   ---
-   ```
-   - Render: `rmarkdown::render("report.md")`
-
-3. **Using Markdown to LaTeX (manual):**
-   - Convert to `.tex` using Pandoc
-   - Customize LaTeX preamble for journal submission requirements
-   - Compile with `xelatex report.tex`
-
-**Required LaTeX Packages:**
-- `amsmath`, `amssymb` (for equations)
-- `graphicx` (for figures)
-- `hyperref` (for clickable references)
-- `booktabs` (for professional tables)
-- `natbib` or `biblatex` (for bibliography)
-
-**Figure Placeholders:**  
-Replace `![Caption](path)` with actual generated plots once analysis is complete. Ensure all figure files are in `outputs/` directory with exact filenames as referenced.
-
-**Table Placeholders:**  
-Fill in [TBD] values from analysis output. Consider generating tables programmatically using Pandas `.to_latex()` for consistency.
-
-**Next Steps:**
-1. Complete data processing pipeline
-2. Run latency computation
-3. Generate all figures and tables
-4. Update all [TBD] placeholders with actual results
-5. Write interpretation sections in Section 5 and 6
-6. Proofread for consistency and clarity
-7. Compile to PDF and review formatting
-8. Submit to professor / prepare for publication
