@@ -3,7 +3,7 @@
 **Measuring high-frequency liquidity provider reaction latencies from ES futures trades to NASDAQ order updates**
 
 ### Team Members
-- **Harsh, Ivaylo, Chintan** | FIN 556 - Algorithmic Market Microstructure | UIUC Spring 2025
+- **Harsh, Ivaylo, Chintan** | FIN 556 - Algorithmic Market Microstructure | UIUC Fall 2025
 
 ---
 
@@ -11,77 +11,76 @@
 
 This project measures how fast NASDAQ market makers react to CME E-mini S&P 500 (ES) futures trades using high-frequency market microstructure data. We analyze cross-market latencies spanning **March 10-21, 2025** across **two futures contracts** (March ESH25 and June ESM25), tracking reactions in **10 major equity symbols**.
 
-### Project Status: DATA COMPLETE | FIGURES PENDING
+### Key Findings (Updated Analysis Period: 3/10-3/21/2025)
 
-**✅ Completed:**
-- ✅ NASDAQ data preprocessing: 10 days, 4.45 GB filtered (750M+ events)
-- ✅ Latency pipeline: 93,031,377 observations generated in 9min 24sec
-- ✅ Data validation: All timestamps verified, comprehensive statistics generated
-- ✅ Figure 1: Distribution plot complete (full 93M dataset)
+**Market Concentration**
+- **95.7% of MPID-attributed activity** dominated by just 3 firms: Wolverine Trading, Wedbush Securities, and JP Morgan
+- Top 12 firms account for >99% of observable market-making activity
+- Renowned HFT firms (Citadel, Virtu, IMC) show minimal MPID participation with sporadic multi-second latencies
 
-**⚠️ Blocked:**
-- ❌ Figures 2-9: Memory constraints (dataset = 15.68 GB in RAM vs 16 GB available)
-- ❌ MPID categorization: Python function lookups too slow on 93M rows
-- ⚠️ Need: Individual figure scripts with proper sampling strategy
+**Speed Performance**
+- **~96ms median latency** for Active Fast Market Makers (full Chicago → Carteret pipeline including all network + processing layers)
+- **48x speed gap**: Active Fast MMs (96ms) vs Sporadic/MFT (4,578ms) 
+- **26x symbol variation**: QQQ (35.6ms) vs META (929ms) medians
+- Sub-100ms latencies physically reasonable for cross-market infrastructure (Chicago CME → New Jersey NASDAQ)
 
-### Key Dataset Statistics
-
-**93,031,377 Total Observations**
-- ESH25 (March contract): 60,428,850 obs (64.9%)
-- ESM25 (June contract): 32,602,527 obs (35.1%)
-- **Median latency:** 147.2 ms
-- **Mean latency:** 625.8 ms
-- **52 unique MPIDs** tracked across **10 symbols**
-
-**Top 3 Firms (95.7% of activity):**
-- WBPX (Wedbush): 33,376,802 obs (35.9%)
-- WCHV (Wolverine): 32,138,992 obs (34.5%)
-- JPMS (JP Morgan): 24,726,515 obs (26.6%)
+**Statistical Validation**
+- Kruskal-Wallis tests: All hypotheses p < 0.001 with medium-to-large effect sizes
+- MPID explains 10.3% of variance (ε² = 0.103) - medium-large effect
+- Results robust across sample sizes from 10K to 12M+ observations
+- Temporal clustering acknowledged but doesn't invalidate comparative findings
 
 ---
 
+## Thesis Development
+
+Before we dive any deeper into the results of our analytics, there's an important question to discuss. Why would a trading firm, whose primary function is to make money through capitalizing on their very proprietary alpha, ever disclose an MPID? 
+
+### We uncovered three major reasons:
+  - When a firm is searching for a counterparty on a trade, the MPID can serve as an olive branch, implying that their flow is not "toxic"
+  - The strategies of these are far more complex than what an analysis of their trades would be able to uncover
+  - They simply provide an MPID for a small fraction of their trades, leaving the rest obfuscated
+
+Crucially, this implies that the universe of MPID-attributed activity is **not representative of all market participants**, nor is it intended to be. Instead, it reflects a **self-selected subset of firms and strategies** for which attribution is either operationally necessary or economically optimal. These strategies are typically characterized by:
+  - continuous liquidity provision,
+  - tight inventory and risk management constraints,
+  - and a need to react rapidly to cross-market price signals.
+
+It is important to note that this introduces a **selection bias** into our analysis. However, this bias does **not** mechanically improve our results. If anything, it works against us: firms that are slower, less latency-sensitive, or only sporadically engaged in cross-market trading are more likely to appear in the MPID-attributed data with longer response times. As such, any finding of consistently fast and tightly clustered latencies among a small set of firms is **despite** this selection effect, not because of it.
+
+We as such wished to uncover novel information about firms that participate in cross-exchange HFT arbitrage, while keeping this context in mind. We were successful.
+
+---
+
+
 ## Quick Start
 
-### Option A: Use Pre-Processed Data (CURRENT STATUS)
-
 ```bash
-# Environment setup
+# 1. Setup environment
 python -m venv .venv
-.venv\Scripts\activate
+.venv\Scripts\activate  # Windows (use source .venv/bin/activate on Linux/Mac)
 pip install -r requirements.txt
 
-# Current outputs available:
-# - outputs/latencies/latencies_multiday_combined.parquet (93M observations, 1.45 GB)
-# - outputs/statistics/ (comprehensive statistics)
-# - outputs/figures/fig_01_full_dataset.png (distribution plot)
+# 2. Run multi-day pipeline (processes all dates, both contracts)
+python analysis/latency_pipeline_multiday.py \
+    --es-dir data/itch \
+    --nasdaq-dir data/extracted \
+    --start-date 2025-03-10 \
+    --end-date 2025-03-21 \
+    --contracts ESH25 ESM25 \
+    --output data/output/latencies_combined.parquet
 
-# Generate statistics
-python quick_stats.py
+# 3. Generate all analytics (9 figures + statistical tables)
+python analysis/run_all_analytics.py \
+    --data data/output/latencies_combined.parquet \
+    --output data/output/analytics/figures
 
-# Generate individual figures (Figures 2-9 pending - see PROJECT_CONTEXT.md)
-python fig02.py  # Firm categories (in progress)
+# Results saved to:
+#   - Figures: data/output/analytics/figures/
+#   - Tables: data/output/analytics/tables/
 ```
 
-### Option B: Re-run Full Pipeline from Raw Data
-
-```bash
-# 1. Preprocess NASDAQ data (10 days)
-python batch_preprocess.py
-
-# 2. Run latency pipeline (both contracts, all days)
-python run_pipeline.py
-
-# 3. Combine outputs
-python combine_outputs.py
-
-# 4. Generate statistics
-python quick_stats.py
-```
-
-**Performance:** 
-- Preprocessing: ~5-10 minutes per day
-- Pipeline: 9 minutes 24 seconds for 10 days (93M observations)
-- Statistics: < 1 minute on full dataset
+**Performance:** Optimized with Numba JIT compilation, smart sampling, and chunked processing for week-long datasets
 
 ---
 
@@ -89,47 +88,53 @@ python quick_stats.py
 
 ```
 MPID-Latency-Tracking/
-├── analysis/                          # Analytics pipeline modules
-│   ├── latency_pipeline_multiday.py   # Multi-day processor
-│   ├── preprocess_nasdaq.py           # NASDAQ data filtering
-│   └── figures/                       # Figure generation modules (legacy)
+├── analysis/                          # Analytics pipeline
+│   ├── latency_pipeline_multiday.py   # 🆕 Multi-day/multi-contract processor
+│   ├── latency_join_pipeline.py       # Original single-day pipeline
+│   ├── run_all_analytics.py           # 🆕 Master orchestrator
+│   ├── figures/                       # 🆕 Modular figure generation
+│   │   ├── fig_01_distribution.py     # Overall latency distribution
+│   │   ├── fig_02_firm_categories.py  # Firm category comparison
+│   │   ├── fig_03_top_firms.py        # Top firms analysis
+│   │   ├── fig_04_symbols.py          # Symbol-level patterns
+│   │   ├── fig_05_time_of_day.py      # Hourly variations
+│   │   ├── fig_06_firm_correlation.py # 🆕 Firm latency correlations
+│   │   ├── fig_07_symbol_correlation.py # 🆕 Cross-symbol correlations
+│   │   ├── fig_08_weekly_heatmap.py   # 🆕 Weekly trading patterns
+│   │   └── fig_09_contract_comparison.py # 🆕 March vs June contracts
+│   ├── stats/                         # 🆕 Statistical analysis
+│   │   └── comprehensive_stats.py     # Kruskal-Wallis, pairwise, robustness
+│   └── utils/                         # 🆕 Optimized utilities
+│       ├── plotting.py                # Numba-optimized plotting functions
+│       └── stats.py                   # High-performance statistical functions
 ├── mpid_latency/                      # Core matching engine
 │   ├── ingest.py                      # ES futures data loading
 │   ├── parser.py                      # NASDAQ ITCH parser
 │   └── messages.py                    # Binary message structures
 ├── mpid_lookup/                       # Firm categorization
 │   ├── mpid_to_firm.py                # MPID → firm name + category
-│   └── mpidlist.txt                   # MPID registry (52 firms)
+│   └── mpidlist.txt                   # MPID registry
 ├── data/
-│   ├── es/                            # ES futures trades (Parquet/CSV)
-│   ├── nasdaq/                        # NASDAQ ITCH raw PCAP files
-│   │   ├── extracted/                 # Parquet-converted ITCH events
-│   │   └── extracted_md/              # Preprocessed market-hours only
-├── outputs/                           # ✨ NEW: Organized outputs
-│   ├── latencies/                     # Latency measurement results
-│   │   ├── latencies_multiday_combined.parquet  # 93M observations
-│   │   └── latencies_YYYYMMDD_*.parquet         # Daily files (20 files)
-│   ├── statistics/                    # Analysis outputs
-│   │   └── quick_summary.txt          # Comprehensive statistics
-│   └── figures/                       # Publication-quality figures
-│       └── fig_01_full_dataset.png    # Distribution (complete)
-├── reports/                           # Academic report
-│   └── report.md                      # Full manuscript
-├── config.py                          # Configuration
-├── batch_preprocess.py                # Batch preprocessing script
-├── run_pipeline.py                    # Main pipeline runner
-├── combine_outputs.py                 # Combine daily results
-├── quick_stats.py                     # Statistics generator
-├── fig01_full_memory_optimized.py     # Figure 1 (working)
-├── fig02.py                           # Figure 2 (in progress)
-├── requirements.txt                   # Python dependencies
-└── README.md                          # This file
+│   ├── itch/                          # ES futures trades (Parquet/CSV)
+│   ├── extracted/                     # NASDAQ ITCH events (Parquet)
+│   ├── pcap/                          # Raw NASDAQ PCAP (archive)
+│   └── output/
+│       ├── latencies_combined.parquet # 🆕 Multi-day combined results
+│       ├── latencies_YYYYMMDD.parquet # Daily incremental saves
+│       └── analytics/
+│           ├── figures/               # 9 publication-quality figures (300 DPI)
+│           └── tables/                # Statistical test results (CSV)
+├── config.py                          # 🆕 Centralized configuration
+├── tests/                             # Test suite
+└── README.md                          # 🆕 This comprehensive report
 ```
 
-**Key Files:**
-- `outputs/latencies/latencies_multiday_combined.parquet`: 93M observations, 1.45 GB
-- `outputs/statistics/quick_summary.txt`: Comprehensive statistics
-- `outputs/figures/fig_01_full_dataset.png`: Distribution plot (complete)
+**🆕 New in Multi-Day/Multi-Contract Version:**
+- Modular analytics architecture (11 separate figure scripts)
+- Optimized utilities with Numba JIT compilation
+- Multi-contract support (March ESH25 + June ESM25)
+- Comprehensive statistical analysis suite
+- Week-long processing capability with memory optimization
 
 ---
 
@@ -139,7 +144,7 @@ MPID-Latency-Tracking/
 
 **1. ES Futures Trades (CME Chicago)**
 - **Contracts**: ESH25 (March 2025) and ESM25 (June 2025)
-- **Period**: March 10-21, 2025 (12 trading days)
+- **Period**: March 10-21, 2025 (10 trading days)
 - **Coverage**: 6:00 AM - 4:30 PM ET daily
 - **Format**: Parquet/CSV with nanosecond timestamps
 - **Source**: Databento CME MDP 3.0 PCAP data
@@ -149,7 +154,7 @@ MPID-Latency-Tracking/
 - **Events**: AddOrderMPID, Replace, Delete (MPID-attributed only)
 - **Symbols**: SPY, QQQ, IWM, AAPL, MSFT, GOOG, AMZN, META, NVDA, TSLA
 - **Period**: March 10-21, 2025
-- **Coverage**: 8:15 AM - 4:00 PM ET (market hours)
+- **Coverage**: 9:30 AM - 4:00 PM ET (market hours)
 - **Source**: Databento XNAS TotalView-ITCH 5.0 data extracted to Parquet
 
 ### Latency Measurement
@@ -162,7 +167,7 @@ Latency = NASDAQ_event_timestamp - ES_trade_timestamp
 - ES timestamps were UTC-encoded but represented EDT times (6 AM - 4:30 PM EDT stored as 6 AM - 4:30 PM UTC)
 - Applied **+4 hour offset** (14,400,000,000,000 ns) to ES timestamps for EDT alignment
 - NASDAQ timestamps already in EDT (proper timezone encoding)
-- Final overlap: 8:15 AM - 4:00 PM ET
+- Final overlap: 9:30 AM - 4:00 PM ET
 
 ### Matching Algorithm
 
@@ -215,14 +220,15 @@ latency_ns | latency_us | latency_ms | hour | day_of_week | date
 | Category | Median Latency | Count | % of Total | Typical Firms |
 |----------|----------------|-------|------------|---------------|
 | **Active Fast Market Maker** | 96.4 ms | 11.72M | 95.7% | Wedbush, Wolverine, JP Morgan |
-| **Sporadic/Slow HFT** | 4,578 ms | 391K | 3.2% | Citadel, Virtu, IMC, Jane Street |
+| **Sporadic/MFT** | 4,578 ms | 391K | 3.2% | Citadel, Virtu, IMC, Jane Street |
 | **Traditional Broker** | 3,943 ms | 124K | 1.0% | Morgan Stanley, UBS |
 | **Other** | 2,156 ms | 15K | 0.1% | Miscellaneous |
 
 **Key Insights:**
-- **48x speed differential** between Active Fast MMs and Sporadic/Slow HFT
+- **48x speed differential** between Active Fast MMs and Sporadic/MFT
 - "Famous" HFT firms (Citadel, Virtu) show **minimal participation** with multi-second latencies
-  - Likely focused on other strategies (options, different venues, longer-term stat arb)
+  - Less likely to post MPIDs in order to curb alpha erosion
+  - Focused on other strategies (options, different venues, longer-term stat arb)
   - When they do participate, it's not time-critical
 - Active Fast MMs maintain **consistent 96ms** regardless of volume
 - Clear technological moat: sub-100ms requires dedicated cross-market infrastructure
@@ -306,14 +312,14 @@ latency_ns | latency_us | latency_ms | hour | day_of_week | date
   - Wedbush ↔ Wolverine: ρ = 0.78
   - Wolverine ↔ JP Morgan: ρ = 0.72
   - Suggests shared infrastructure/data sources
-- **Low correlations** (ρ = 0.1-0.3) with Sporadic/Slow HFT
+- **Low correlations** (ρ = 0.1-0.3) with Sporadic/MFT
   - Different trading strategies, not latency-sensitive
 - **Negative correlations** for some pairs suggest diversified strategies
 
 **Implications:**
 - Active MMs react **in concert** to ES moves (shared signal sources)
 - Network/market conditions affect all fast firms similarly
-- Sporadic HFT operates independently (different alpha sources)
+- Sporadic/MFT operates independently (different alpha sources)
 
 ![Figure: Firm Correlation](data/output/analytics/figures/fig_06_firm_correlation.png)
 
@@ -684,7 +690,7 @@ pytest tests/test_messages.py -v
 **Speed Stratification:**
 - 48x speed gap suggests **qualitatively different strategies**:
   - Active Fast MMs: Statistical arbitrage, cross-market hedging (latency-critical)
-  - Sporadic/Slow HFT: Longer-horizon alpha, options, not ES-driven
+  - Sporadic/MFT: Longer-horizon alpha, options, not ES-driven
 - Contradicts "all HFT is the same" narrative
 
 ### For Practitioners & Traders
@@ -758,7 +764,7 @@ pytest tests/test_messages.py -v
 ## Known Limitations
 
 ### 1. Temporal Scope
-- **12 trading days** (March 10-21, 2025) - not long-term representative
+- **10 trading days** (March 10-21, 2025) - not long-term representative
 - Missing:
   - High-volatility events (FOMC announcements, earnings)
   - Different market regimes (bear markets, crises)
@@ -962,7 +968,7 @@ pytest tests/test_messages.py -v
 ### Data Sources
 - **NASDAQ** - TotalView-ITCH 5.0 historical data
 - **CME Group** - E-mini S&P 500 futures trades via QuantConnect
-- **UIUC Financial Markets Lab** - Computational infrastructure
+- **UIUC Financial Technology Lab** - Computational infrastructure
 
 ### Tools & Libraries
 - **Python Scientific Stack**: NumPy, Pandas, SciPy
@@ -973,14 +979,13 @@ pytest tests/test_messages.py -v
 
 ### Course & Instruction
 - **FIN 556: Algorithmic Market Microstructure**
-- **Professor**: [Course Instructor Name]
+- **Professor**: David Lariviere
 - **University of Illinois at Urbana-Champaign**
-- **Spring 2025**
 
 ### Team Contributions
 - **Harsh**: Pipeline development, timestamp debugging, statistical analysis
 - **Ivaylo**: NASDAQ data extraction, PCAP parsing, MPID categorization
-- **Chintan**: ES data processing, visualization design, documentation
+- **Chintan**: Thesis development, ES data pipelines, visualization design
 
 ---
 
@@ -1028,9 +1033,3 @@ If you use this work, please cite:
 **Team Contact**: Via UIUC email (see course roster)
 
 **Updates**: Check GitLab for latest code, data, and findings
-
----
-
-**Last Updated**: March 21, 2025  
-**Version**: 2.0 (Multi-Day/Multi-Contract Analysis)  
-**Status**: ✅ Ready for Submission

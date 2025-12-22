@@ -343,7 +343,7 @@ To ensure robust results and computational feasibility:
 ### 5.1 Overall Latency Distribution
 
 **Figure 1: Overall Latency Histogram**  
-![Overall Histogram](../outputs/latency_hist_overall.png)  
+![Overall Histogram](../data/output/analytics/figures/fig_01_latency_distribution.png)  
 *Caption: Distribution of measured latencies (in microseconds) from ES trade events to first MPID action across all symbols and market participants. N = [TBD] observations.*
 
 **Table 1: Overall Latency Summary Statistics**
@@ -371,7 +371,7 @@ To ensure robust results and computational feasibility:
 ### 5.2 Per-MPID Latency Analysis
 
 **Figure 2: Latency Distributions by MPID**  
-![MPID Boxplots](../outputs/latency_by_mpid_boxplot.png)  
+![MPID Boxplots](../data/output/analytics/figures/fig_03_top_firms.png)  
 *Caption: Box plots showing latency distributions for each MPID. Boxes represent IQR (p25-p75), whiskers extend to 1.5×IQR, outliers shown as points.*
 
 **Table 2: Per-MPID Summary Statistics**
@@ -395,7 +395,7 @@ Kruskal-Wallis H-test for differences across MPIDs: $H = [TBD]$, $p < [TBD]$
 ### 5.3 Time-of-Day Effects
 
 **Figure 3: Median Latency by Hour of Day**  
-![Time of Day Plot](../outputs/latency_by_hour.png)  
+![Time of Day Plot](../data/output/analytics/figures/fig_05_time_of_day.png)  
 *Caption: Median latency (with IQR bands) across trading hours. Hour 9 = 09:30-10:30, Hour 15 = 15:00-16:00.*
 
 **Table 3: Latency by Hour of Day**
@@ -421,7 +421,7 @@ Friedman test / Kruskal-Wallis for hour-of-day effect: $\chi^2 = [TBD]$, $p < [T
 ### 5.4 Symbol-Level Analysis
 
 **Figure 4: Latency Distributions by Symbol**  
-![Symbol Comparison](../outputs/latency_by_symbol.png)  
+![Symbol Comparison](../data/output/analytics/figures/fig_04_symbols.png)  
 *Caption: Violin plots or box plots comparing latency distributions across analyzed symbols.*
 
 **Table 4: Per-Symbol Summary Statistics**
@@ -456,7 +456,7 @@ Friedman test / Kruskal-Wallis for hour-of-day effect: $\chi^2 = [TBD]$, $p < [T
 ### 5.6 Day-Level Variation
 
 **Figure 5: Daily Median Latency Time Series**  
-![Daily Time Series](../outputs/latency_daily_timeseries.png)  
+![Daily Time Series](../data/output/analytics/figures/fig_08_weekly_heatmap.png)  
 *Caption: Evolution of median latency across trading days. Shaded regions indicate [TBD: market events, high volatility days, etc.].*
 
 **Interpretation:**  
