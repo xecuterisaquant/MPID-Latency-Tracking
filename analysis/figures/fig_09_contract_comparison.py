@@ -28,14 +28,36 @@ def generate_figure_09(df: pd.DataFrame, output_dir: Path = FIGURES_DIR) -> None
     # Use full dataset (no sampling)
     print("  Using full dataset for contract comparison (no sampling)...")
     plot_df = df.copy()
+    # Map contract codes (e.g. ESH25, ESM25) to month labels like 'March ES', 'June ES'
+    month_map = {
+        'F': 'January', 'G': 'February', 'H': 'March', 'J': 'April', 'K': 'May',
+        'M': 'June', 'N': 'July', 'Q': 'August', 'U': 'September', 'V': 'October',
+        'X': 'November', 'Z': 'December'
+    }
+
+    def contract_to_label(c):
+        try:
+            # Expecting format like 'ESM25' or 'ESH25'
+            if not isinstance(c, str) or len(c) < 3:
+                return c
+            prefix = c[:2]
+            month_code = c[2]
+            month = month_map.get(month_code, None)
+            if month:
+                return f"{month} {prefix}"
+            return c
+        except Exception:
+            return c
+
+    plot_df['contract_label'] = plot_df['contract'].apply(contract_to_label)
     
     # Create figure with multiple panels
     fig, axes = plt.subplots(2, 2, figsize=(FIGURE_WIDTH * 2, FIGURE_HEIGHT * 2), dpi=FIGURE_DPI)
     
     # Panel 1: Distribution comparison
     ax1 = axes[0, 0]
-    for contract in plot_df['contract'].unique():
-        contract_data = plot_df[plot_df['contract'] == contract]['latency_ms']
+    for contract in plot_df['contract_label'].unique():
+        contract_data = plot_df[plot_df['contract_label'] == contract]['latency_ms']
         ax1.hist(contract_data, bins=50, alpha=0.6, label=contract, edgecolor='black', linewidth=0.5)
     ax1.set_xlabel('Latency (ms)', fontsize=11, fontweight='bold')
     ax1.set_ylabel('Count', fontsize=11, fontweight='bold')
@@ -45,7 +67,7 @@ def generate_figure_09(df: pd.DataFrame, output_dir: Path = FIGURES_DIR) -> None
     
     # Panel 2: Boxplot comparison
     ax2 = axes[0, 1]
-    sns.boxplot(data=plot_df, x='contract', y='latency_ms', palette='Set2', ax=ax2, showfliers=False)
+    sns.boxplot(data=plot_df, x='contract_label', y='latency_ms', palette='Set2', ax=ax2, showfliers=False)
     ax2.set_xlabel('Contract', fontsize=11, fontweight='bold')
     ax2.set_ylabel('Latency (ms)', fontsize=11, fontweight='bold')
     ax2.set_title('Box Plot Comparison', fontsize=12, fontweight='bold')
@@ -54,9 +76,9 @@ def generate_figure_09(df: pd.DataFrame, output_dir: Path = FIGURES_DIR) -> None
     # Panel 3: Over-time comparison
     ax3 = axes[1, 0]
     plot_df['date'] = pd.to_datetime(plot_df['nasdaq_time_ns'], unit='ns').dt.date
-    daily_median = plot_df.groupby(['date', 'contract'])['latency_ms'].median().reset_index()
-    for contract in daily_median['contract'].unique():
-        contract_series = daily_median[daily_median['contract'] == contract]
+    daily_median = plot_df.groupby(['date', 'contract_label'])['latency_ms'].median().reset_index()
+    for contract in daily_median['contract_label'].unique():
+        contract_series = daily_median[daily_median['contract_label'] == contract]
         ax3.plot(contract_series['date'], contract_series['latency_ms'], 
                 marker='o', label=contract, linewidth=2)
     ax3.set_xlabel('Date', fontsize=11, fontweight='bold')
@@ -68,7 +90,7 @@ def generate_figure_09(df: pd.DataFrame, output_dir: Path = FIGURES_DIR) -> None
     
     # Panel 4: Volume comparison
     ax4 = axes[1, 1]
-    volume_data = plot_df['contract'].value_counts()
+    volume_data = plot_df['contract_label'].value_counts()
     ax4.bar(volume_data.index, volume_data.values, color=['#3498db', '#e74c3c'])
     ax4.set_xlabel('Contract', fontsize=11, fontweight='bold')
     ax4.set_ylabel('Number of Observations', fontsize=11, fontweight='bold')

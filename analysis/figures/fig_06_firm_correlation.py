@@ -59,9 +59,9 @@ def generate_figure_06(df: pd.DataFrame, output_dir: Path = FIGURES_DIR, top_n: 
     fig, ax = setup_figure(figsize=(FIGURE_WIDTH * 1.3, FIGURE_HEIGHT * 1.3))
     
     # Heatmap
-    sns.heatmap(corr_matrix, annot=True, fmt='.2f', cmap='RdYlGn', center=0,
+    sns.heatmap(corr_matrix, annot=True, fmt='.2f', cmap='RdYlGn', center=0.5,
                 square=True, linewidths=0.5, cbar_kws={'label': 'Spearman ρ'},
-                vmin=-1, vmax=1, ax=ax)
+                vmin=0, vmax=1, ax=ax)
     
     ax.set_title(f'Firm Latency Correlation Matrix (Top {top_n} Firms)\nSpearman ρ of Median Latencies',
                  fontsize=15, fontweight='bold', pad=20)
