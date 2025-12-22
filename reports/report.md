@@ -1,14 +1,19 @@
 # High-Frequency Liquidity Provider Response Latency to External Price Shocks: An Empirical Analysis of MPID-Attributed Market Participants on NASDAQ
 
-**Authors:** [TBD]  
-**Date:** December 20, 2025  
+**Authors:** Harsh Hari, Ivaylo Maksimov, Chintan Vajariya 
+**Date:** December 22, 2025  
 **Course:** FIN556 Market Microstructure  
 
 ---
 
 ## Abstract
 
-This study measures the reaction time of NASDAQ Market Participant Identifiers (MPIDs) to external price shocks originating from CME E-mini S&P 500 futures (ES) trades. We define stimulus as ES trade events (LastTradeMsg) and response as the first subsequent add, cancel, or replace action by an MPID on NASDAQ XNAS. Using nanosecond-precision timestamps from market data feeds, we compute per-MPID latency distributions and examine temporal patterns across trading hours and days. Our findings provide empirical evidence on [TBD: key finding placeholder] with median latencies of [TBD] and significant heterogeneity across market participants. We document important limitations including potential clock misalignment between venues, incomplete MPID attribution, and challenges in establishing causal links between stimulus and response events.
+This study measures the reaction time of NASDAQ market participants, as proxied by Market Participant Identifiers (MPIDs), to external price shocks originating from CME E-mini S&P 500 futures (ES) trades. We define a stimulus as an ES trade event (LastTradeMsg) and a response as the first subsequent add, cancel, or replace action associated with a given MPID on NASDAQ XNAS. Using nanosecond-precision timestamps from market data feeds, we compute MPID-level latency distributions and examine temporal patterns across trading hours and days. Our findings provide empirical evidence on [TBD: key finding placeholder] with median latencies of [TBD] and significant heterogeneity across market participants. We document important limitations including potential clock misalignment between venues, incomplete MPID attribution, and challenges in establishing causal links between stimulus and response events.
+
+## Acknowledgments
+
+The authors thank **Professor David Lariviere** for his guidance and feedback throughout the development of this project. We also thank **Gustaf Soederlind** for providing his **CME MDP 3.0 parser**, which enabled the construction and processing of the ES trade event data used in this analysis.
+
 
 **Keywords:** High-frequency trading, market microstructure, latency measurement, MPID, liquidity provision, cross-market arbitrage
 
@@ -77,7 +82,7 @@ Our analysis relies on two primary data sources:
 **Source:** CME MDP 3.0 (Market Data Platform) feed  
 **Format:** PCAP files containing binary market data messages  
 **Timestamp precision:** Nanoseconds (sending time from CME Globex matching engine)  
-**Collection period:** [TBD: specify date range]  
+**Collection period:** March 10th, 2025 - March 21st, 2025
 **Message types used:** LastTradeMsg (trade executions only)  
 
 **Schema (relevant fields):**
@@ -98,12 +103,12 @@ ES futures are the most liquid equity index derivative globally, with trade late
 **Source:** NASDAQ TotalView-ITCH 5.0 feed  
 **Format:** PCAP files with ITCH binary protocol messages  
 **Timestamp precision:** Nanoseconds (NASDAQ gateway timestamp)  
-**Collection period:** [TBD: same date range as ES data]  
+**Collection period:** March 10th, 2025 - March 21st, 2025  
 **Message types used:**
-- Add Order (A/F messages): New visible limit order
-- Order Cancel (X message): Full cancellation
+- Add Order MPID (F message): New limit order (MPID-attributed)
+- Order Cancel (X message): Partial order cancellation
 - Order Replace (U message): Price/size modification
-- Order Delete (D message): Full deletion
+- Order Delete (D message): Full order cancellation
 
 **Schema (relevant fields):**
 ```
@@ -114,18 +119,18 @@ ES futures are the most liquid equity index derivative globally, with trade late
 - side: enum (buy/sell)
 - price: int32 (price in 1/10000 units)
 - shares: int32 (share quantity)
-- message_type: enum (A, F, X, U, D)
+- message_type: string ("AddOrderMPID", "Cancel", "Replace", "Delete")
 ```
 
 **MPID Attribution:**  
-NASDAQ assigns 4-character MPIDs to registered market participants. Attribution is **voluntary** and incomplete—many orders are submitted without MPID identifiers. Our analysis is restricted to the subset of orders where MPID is populated, which introduces potential selection bias (discussed in Section 6.2).
+NASDAQ assigns 4-character MPIDs to registered market participants. Attribution is **voluntary** and incomplete—many orders are submitted without MPID identifiers. Moreover, individual firms may have several distinct MPIDs assigned to them. Our analysis is restricted to the subset of orders where MPID is populated, which introduces potential selection bias (discussed in Section 6.2).
 
 ### 3.2 Data Processing Pipeline
 
 **File Locations:**
-- Raw PCAP files: `data/pcap/`
-- Extracted messages: `data/itch/` (processed via `message_extraction/message_extraction.py`)
-- Parsed data: Generated in-memory or stored as Parquet (TBD based on volume)
+- Raw PCAP files: Stored on the course-provided virtual machine 
+- Extracted messages: ITCH/MDP messages parsed directly on the VM (processed via `message_extraction/message_extraction.py`)
+- Parsed data: Stored locally in Parquet format
 
 **Processing Steps:**
 1. **PCAP parsing:** Extract UDP packets containing ITCH/MDP messages using `dpkt` or `scapy`
@@ -199,7 +204,7 @@ No additional filtering applied to ES trades. All LastTradeMsg events are used a
 
 #### 4.1.2 Response Event (MPID Action)
 
-A response event $r_j$ is defined as an MPID-attributed message on NASDAQ XNAS at timestamp $t_j^{\text{XNAS}}$ with message type in $\{\text{Add}, \text{Cancel}, \text{Replace}\}$:
+A response event $r_j$ is defined as an MPID-attributed message on NASDAQ XNAS at timestamp $t_j^{\text{XNAS}}$ with message type in $\{\text{Add}, \text{Cancel}, \text{Delete}, \text{Replace}\}$:
 
 $$
 r_j = \{t_j^{\text{XNAS}}, \text{MPID}_j, \text{symbol}_j, \text{side}_j, \text{type}_j\}
@@ -210,7 +215,7 @@ where:
 - $\text{MPID}_j$ = 4-character market participant ID
 - $\text{symbol}_j$ = stock ticker
 - $\text{side}_j$ = bid/ask (derived from order side)
-- $\text{type}_j \in \{\text{A, F, X, U, D}\}$
+- $\text{type}_j \in \{\text{F, X, U, D}\}$
 
 **Filtering:**
 - MPID must be non-null
