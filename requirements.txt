@@ -1,0 +1,29 @@
+# MPID Latency Tracking - Requirements
+# Python 3.10+ (tested on 3.14)
+
+# Core data processing
+pandas>=2.0.0
+numpy>=1.24.0
+pyarrow>=12.0.0
+
+# Performance optimization
+numba>=0.57.0
+
+# Statistical analysis
+scipy>=1.10.0
+
+# Visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Optional: Enhanced performance
+# polars>=0.18.0  # Fast DataFrame operations (alternative to pandas)
+# dask>=2023.5.0  # Distributed processing for very large datasets
+
+# Testing
+pytest>=7.3.0
+pytest-cov>=4.1.0
+
+# Development tools (optional)
+# jupyter>=1.0.0
+# ipython>=8.12.0

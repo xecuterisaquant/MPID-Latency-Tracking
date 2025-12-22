@@ -1,103 +1,224 @@
 """
-Centralized configuration for MPID Latency Analysis
-
-All configurable parameters in one place for easy VM deployment.
-Adjust paths and settings here rather than modifying individual scripts.
+Centralized configuration for Multi-Day, Multi-Contract MPID Latency Analysis
+All configurable parameters in one place for easy deployment.
 """
 
 from pathlib import Path
-from typing import List
+from typing import List, Dict
+from datetime import date, timedelta
 import multiprocessing
 
 # ============================================================================
 # DATA PATHS
 # ============================================================================
 
-# Base directories - UPDATE THESE FOR VM DEPLOYMENT
+# Base directories
 PROJECT_ROOT = Path(__file__).parent.resolve()
 DATA_ROOT = PROJECT_ROOT / "data"
 
 # Input data directories
-ES_DATA_DIR = DATA_ROOT / "es"
-NASDAQ_DATA_DIR = DATA_ROOT / "extracted"
-PCAP_DATA_DIR = DATA_ROOT / "pcap"
+ES_DATA_DIR = DATA_ROOT / "itch"  # ES futures trades
+NASDAQ_DATA_DIR = DATA_ROOT / "extracted"  # NASDAQ ITCH events
+PCAP_DATA_DIR = DATA_ROOT / "pcap"  # Raw PCAP files (archive)
 
 # Output directories
 OUTPUT_DIR = DATA_ROOT / "output"
-RESULTS_DIR = OUTPUT_DIR / "results"
-FIGURES_DIR = OUTPUT_DIR / "figures"
+RESULTS_DIR = OUTPUT_DIR
+FIGURES_DIR = OUTPUT_DIR / "analytics" / "figures"
+TABLES_DIR = OUTPUT_DIR / "analytics" / "tables"
 REPORTS_DIR = OUTPUT_DIR / "reports"
 
 # Ensure output directories exist
-for d in [OUTPUT_DIR, RESULTS_DIR, FIGURES_DIR, REPORTS_DIR]:
+for d in [OUTPUT_DIR, RESULTS_DIR, FIGURES_DIR, TABLES_DIR, REPORTS_DIR]:
     d.mkdir(parents=True, exist_ok=True)
 
 # ============================================================================
-# ANALYSIS PARAMETERS
+# DATE RANGES - MULTI-DAY ANALYSIS
 # ============================================================================
+# Full analysis period: March 10-21, 2025 (12 trading days)
+START_DATE = date(2025, 3, 10)
+END_DATE = date(2025, 3, 21)
 
-# Target symbols to analyze (most liquid ES-correlated equities)
-TARGET_SYMBOLS = [
-    'QQQ',   # NASDAQ 100 ETF
-    'SPY',   # S&P 500 ETF
-    'IWM',   # Russell 2000 ETF
-    'AAPL',  # Apple
-    'NVDA',  # NVIDIA
-    'TSLA',  # Tesla
-    'AMZN',  # Amazon
-    'MSFT',  # Microsoft
-    'GOOGL', # Alphabet
-    'META',  # Meta
-]
+# Generate all trading days (exclude weekends)
+ALL_DATES = []
+current = START_DATE
+while current <= END_DATE:
+    if current.weekday() < 5:  # Monday=0, Friday=4
+        ALL_DATES.append(current)
+    current += timedelta(days=1)
 
-# ES contracts to analyze (ESH5, ESM5, etc.)
-ES_CONTRACTS = [
-    'ES',   # Generic front-month
-    'MES',  # Micro E-mini
-]
-
-# Security IDs from CME (update as needed)
-ES_SECURITY_IDS = {
-    5002: 'ES',          # E-mini S&P 500
-    42005347: 'MES',     # Micro E-mini S&P 500
+# ============================================================================
+# FUTURES CONTRACTS - MULTI-CONTRACT ANALYSIS
+# ============================================================================
+CONTRACTS = {
+    'ESH25': {  # March 2025 contract
+        'name': 'ES March 2025',
+        'expiry': date(2025, 3, 21),
+        'primary_period': (date(2025, 3, 10), date(2025, 3, 21))
+    },
+    'ESM25': {  # June 2025 contract
+        'name': 'ES June 2025',
+        'expiry': date(2025, 6, 20),
+        'primary_period': (date(2025, 3, 10), date(2025, 3, 21))
+    }
 }
 
-# Top MPIDs to focus on (update from data analysis)
+# Security IDs from CME
+ES_SECURITY_IDS = {
+    5002: 'ESH25',      # March E-mini S&P 500
+    5003: 'ESM25',      # June E-mini S&P 500
+    42005347: 'MES',    # Micro E-mini
+}
+
+# ============================================================================
+# SYMBOLS - NASDAQ EQUITY UNIVERSE
+# ============================================================================
+SYMBOLS = [
+    'SPY',   # S&P 500 ETF
+    'QQQ',   # NASDAQ-100 ETF
+    'IWM',   # Russell 2000 ETF
+    'AAPL',  # Apple
+    'MSFT',  # Microsoft
+    'GOOG',  # Alphabet
+    'AMZN',  # Amazon
+    'META',  # Meta
+    'NVDA',  # NVIDIA
+    'TSLA'   # Tesla
+]
+
+# Legacy alias for backwards compatibility
+TARGET_SYMBOLS = SYMBOLS
+ES_CONTRACTS = list(CONTRACTS.keys())
+
+# ============================================================================
+# TIMESTAMP HANDLING
+# ============================================================================
+# Critical: ES data is UTC-encoded but represents EDT times
+EDT_OFFSET_NS = 4 * 3600 * 1_000_000_000  # +4 hours in nanoseconds
+
+# Timezone info
+NASDAQ_TZ = 'America/New_York'  # EDT/EST
+CME_TZ = 'America/Chicago'      # CDT/CST
+
+# ============================================================================
+# LATENCY MATCHING PARAMETERS
+# ============================================================================
+MATCHING_WINDOW_NS = 10_000_000_000  # 10 seconds in nanoseconds
+MAX_LATENCY_SECONDS = 10.0
+MIN_LATENCY_NS = 0
+MAX_LATENCY_NS = MATCHING_WINDOW_NS
+
+# Convert to milliseconds for filtering
+MIN_LATENCY_MS = MIN_LATENCY_NS / 1_000_000
+MAX_LATENCY_MS = MAX_LATENCY_NS / 1_000_000
+
+# ES trade filters
+MIN_ES_TRADE_SIZE = 1  # Minimum contracts
+MIN_PRICE_MOVEMENT = 0  # Optional price movement filter
+
+# ============================================================================
+# PERFORMANCE OPTIMIZATION
+# ============================================================================
+# Memory management for week-long data
+CHUNK_SIZE = 1_000_000  # Process in 1M row chunks
+MAX_SAMPLE_SIZE = 500_000  # Max samples per category for plotting
+
+# Parallel processing
+NUM_WORKERS = max(1, multiprocessing.cpu_count() - 2)
+N_JOBS = -1  # Use all available cores (for sklearn-style APIs)
+
+# Numba optimization
+USE_NUMBA = True
+NUMBA_CACHE = True
+
+# ============================================================================
+# FIGURE SETTINGS - PUBLICATION QUALITY
+# ============================================================================
+FIGURE_DPI = 300
+FIGURE_WIDTH = 12
+FIGURE_HEIGHT = 8
+FIGURE_FORMAT = 'png'
+
+# Seaborn style
+SEABORN_STYLE = 'whitegrid'
+SEABORN_CONTEXT = 'paper'
+SEABORN_PALETTE = 'Set2'
+
+# Color scheme for firm categories
+CATEGORY_COLORS = {
+    'Active Fast Market Maker': '#2ecc71',      # Green
+    'Sporadic/Slow HFT': '#e74c3c',             # Red
+    'Traditional Broker': '#3498db',             # Blue
+    'Other': '#95a5a6'                           # Gray
+}
+
+# ============================================================================
+# STATISTICAL ANALYSIS
+# ============================================================================
+SIGNIFICANCE_LEVEL = 0.05
+CONFIDENCE_LEVEL = 0.95
+
+# Kruskal-Wallis test
+KRUSKAL_WALLIS_GROUPS = ['mpid', 'symbol', 'hour', 'firm_category', 'contract']
+
+# Effect size thresholds (epsilon-squared)
+EFFECT_SIZE_SMALL = 0.01
+EFFECT_SIZE_MEDIUM = 0.06
+EFFECT_SIZE_LARGE = 0.14
+
+# ============================================================================
+# FIRM CATEGORIZATION
+# ============================================================================
+# Categories from mpid_lookup/mpid_to_firm.py
+FIRM_CATEGORIES = [
+    'Active Fast Market Maker',
+    'Sporadic/Slow HFT',
+    'Traditional Broker',
+    'Other'
+]
+
+# Top firms/MPIDs to highlight
+TOP_N_FIRMS = 12
+TOP_N_MPIDS = 15
+
 TOP_MPIDS = [
-    'WBPX',  # Wells Fargo
-    'JPMS',  # JPMorgan
-    'WCHV',  # Wells Fargo Clearing
-    'VIRT',  # Virtu
-    'GSCO',  # Goldman Sachs
-    'MSCO',  # Morgan Stanley
-    'CITI',  # Citi
-    'DBAB',  # Deutsche Bank
-    'UBSS',  # UBS
-    'WEDB',  # Wells Fargo
+    'WEDB', 'WLOV', 'JPMS', 'NITE', 'CANT', 'EDGX',
+    'MSCO', 'GSCO', 'VIRT', 'CITI', 'UBSS', 'DBAB'
 ]
 
 # ============================================================================
-# LATENCY JOIN PARAMETERS
+# OUTPUT SETTINGS
 # ============================================================================
+# Parquet compression
+PARQUET_ENGINE = 'pyarrow'
+PARQUET_COMPRESSION = 'snappy'
+PARQUET_COMPRESSION_LEVEL = None  # Use default
 
-# Maximum latency window to search (seconds)
-MAX_LATENCY_SECONDS = 10.0
-
-# Minimum trade size to trigger latency measurement (ES contracts)
-MIN_ES_TRADE_SIZE = 5  # Filter out tiny trades
-
-# Minimum price movement to consider (ticks)
-MIN_PRICE_MOVEMENT = 1  # Optional: filter small price changes
+# CSV settings
+CSV_FLOAT_FORMAT = '%.4f'
 
 # ============================================================================
-# PERFORMANCE TUNING
+# LOGGING
 # ============================================================================
+LOG_LEVEL = 'INFO'
+LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 
-# Number of CPU cores to use (None = auto-detect, leave 1-2 free)
-NUM_WORKERS = max(1, multiprocessing.cpu_count() - 2)
+# ============================================================================
+# DATA VALIDATION THRESHOLDS
+# ============================================================================
+MIN_OBSERVATIONS_PER_DAY = 500_000  # Flag if day has < 500K observations
+MAX_OBSERVATIONS_PER_DAY = 20_000_000  # Flag if day has > 20M (potential duplication)
 
-# Chunk size for streaming processing
-CHUNK_SIZE = 10000  # Rows per chunk
+# Latency sanity checks
+EXPECTED_MEDIAN_LATENCY_MS = 96  # ~96ms from single-day analysis
+LATENCY_OUTLIER_THRESHOLD_MS = 5000  # Flag latencies > 5 seconds
+EXPECTED_PCT_UNDER_100MS = 0.45  # ~45-50% should be under 100ms
+
+# ============================================================================
+# PROGRESS TRACKING
+# ============================================================================
+PROGRESS_BAR = True
+VERBOSE = True
 
 # Batch size for parallel processing
 BATCH_SIZE = 100  # Files per batch
