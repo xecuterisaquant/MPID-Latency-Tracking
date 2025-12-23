@@ -1,6 +1,6 @@
 """
-Figure 02: Firm Category Analysis
-Comparison across Active Fast MMs, Sporadic/Slow HFT, Traditional Brokers, Other
+Figure 02: Firm Category Analysis  
+Comparison of Active Fast MMs vs Other participants
 """
 
 import pandas as pd
@@ -11,65 +11,94 @@ from pathlib import Path
 import sys
 
 sys.path.append(str(Path(__file__).parent.parent.parent))
-from config import FIGURES_DIR, FIGURE_DPI, FIGURE_WIDTH, FIGURE_HEIGHT, CATEGORY_COLORS
+from config import FIGURES_DIR, FIGURE_DPI, FIGURE_WIDTH, FIGURE_HEIGHT
 from analysis.utils.plotting import setup_figure, save_figure, smart_sample
-from mpid_lookup.mpid_to_firm import get_firm_category
+
+def categorize_firm_by_type(mpid):
+    """Categorize firms by business type to highlight diversity of top participants"""
+    
+    # Investment Banks
+    if mpid in ['JPMS', 'GSCO', 'UBSS']:
+        return 'Investment Banks'
+    
+    # Wealth Managers / Retail Brokers
+    elif mpid in ['WBPX', 'WBSI']:
+        return 'Wealth Managers'
+    
+    # Pure HFT / Market Makers
+    elif mpid in ['WCHV', 'VIRT', 'CDRG', 'IMCC', 'SGAS']:
+        return 'HFT / Market Makers'
+    
+    # Trading Firms
+    elif mpid in ['FLTU', 'XGWD', 'ETMM']:
+        return 'Proprietary Trading'
+    
+    # Everything else
+    else:
+        return 'Other'
 
 def generate_figure_02(df: pd.DataFrame, output_dir: Path = FIGURES_DIR) -> None:
     """
-    Generate firm category comparison with boxplots and overlays
+    Generate firm category comparison by business type
+    Shows diversity of top participants: Investment Banks, Wealth Managers, HFT firms
     """
     print("📊 Generating Figure 02: Firm Category Analysis...")
     
-    # Add firm category column if not present
-    if 'firm_category' not in df.columns:
-        df['firm_category'] = df['mpid'].apply(get_firm_category)
+    # Create category based on firm business type
+    firm_category = df['mpid'].apply(categorize_firm_by_type)
     
-    # Sample for plotting performance
-    plot_df = smart_sample(df, max_size=500_000, stratify_col='firm_category')
+    # Sample for plotting (balanced across categories)
+    plot_data = []
+    for category in firm_category.unique():
+        cat_mask = firm_category == category
+        n_samples = min(100000, cat_mask.sum())
+        cat_indices = df.index[cat_mask].to_series().sample(n=n_samples, random_state=42)
+        plot_data.append(df.loc[cat_indices].assign(firm_category=category))
+    
+    plot_df = pd.concat(plot_data, ignore_index=True)
     
     # Create figure
     fig, ax = setup_figure(figsize=(FIGURE_WIDTH * 1.5, FIGURE_HEIGHT))
     
-    # Category order by median latency
+    # Sort categories by median latency
     category_order = plot_df.groupby('firm_category')['latency_ms'].median().sort_values().index.tolist()
     
-    # Boxplot
-    sns.boxplot(data=plot_df, x='latency_ms', y='firm_category', order=category_order,
-                palette=CATEGORY_COLORS, ax=ax, showfliers=False)
+    # Use seaborn violin plot for cleaner visualization
+    sns.violinplot(data=plot_df, x='firm_category', y='latency_ms', order=category_order,
+                   palette='Set2', ax=ax, inner='box', cut=0)
     
-    # Add KDE overlays
-    for i, category in enumerate(category_order):
-        cat_data = plot_df[plot_df['firm_category'] == category]['latency_ms']
-        # Clip extreme values for cleaner KDE
-        cat_data_clipped = cat_data[cat_data <= cat_data.quantile(0.99)]
-        
-        # Create KDE
-        from scipy.stats import gaussian_kde
-        if len(cat_data_clipped) > 100:
-            kde = gaussian_kde(cat_data_clipped)
-            x_range = np.linspace(cat_data_clipped.min(), cat_data_clipped.max(), 200)
-            kde_values = kde(x_range)
-            
-            # Normalize and shift for overlay
-            kde_normalized = kde_values / kde_values.max() * 0.4  # Scale to 40% of box height
-            ax.fill_betweenx(i + kde_normalized, x_range, alpha=0.3, 
-                            color=CATEGORY_COLORS.get(category, '#95a5a6'))
+    # Add median points
+    medians = plot_df.groupby('firm_category')['latency_ms'].median().reindex(category_order)
+    ax.scatter(range(len(category_order)), medians.values, color='red', s=100, zorder=3, 
+               label='Median', marker='D')
     
-    ax.set_xlabel('Latency (ms)', fontsize=13, fontweight='bold')
-    ax.set_ylabel('Firm Category', fontsize=13, fontweight='bold')
-    ax.set_title('Latency by Firm Category (n = {:,})'.format(len(df)), 
+    # Labels and formatting
+    ax.set_xlabel('Firm Type', fontsize=13, fontweight='bold')
+    ax.set_ylabel('Latency (ms)', fontsize=13, fontweight='bold')
+    ax.set_title(f'Latency by Firm Category (n = {len(df):,})', 
                  fontsize=15, fontweight='bold', pad=20)
-    ax.grid(True, alpha=0.3, axis='x')
+    ax.grid(True, alpha=0.3, axis='y')
+    ax.legend(loc='upper right')
     
-    # Add summary stats annotation
-    stats_text = ""
+    # Rotate x labels for readability
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=15, ha='right')
+    
+    # Add summary statistics annotation
+    stats_text = "Top 3 Firms:\n"
+    stats_text += "• JPMS (Investment Bank)\n"
+    stats_text += "• WBPX (Wealth Manager)\n"
+    stats_text += "• WCHV (HFT Market Maker)\n\n"
     for category in category_order:
-        cat_data = df[df['firm_category'] == category]['latency_ms']
-        stats_text += f"{category}:\n  Med={cat_data.median():.1f}ms, n={len(cat_data):,}\n"
+        cat_data = plot_df[plot_df['firm_category'] == category]['latency_ms']
+        stats_text += f"{category}:\n  Med={cat_data.median():.1f}ms\n"
+    
+    ax.text(0.02, 0.98, stats_text, transform=ax.transAxes,
+            bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8),
+            verticalalignment='top', horizontalalignment='left',
+            fontsize=9, family='monospace')
     
     ax.text(0.98, 0.98, stats_text, transform=ax.transAxes,
-            bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.7),
+            bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8),
             verticalalignment='top', horizontalalignment='right',
             fontsize=9, family='monospace')
     
