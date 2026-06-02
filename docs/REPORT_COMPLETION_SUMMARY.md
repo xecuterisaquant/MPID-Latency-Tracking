@@ -24,7 +24,7 @@ All [TBD] placeholders in `reports/report.md` have been successfully filled with
 
 ### 3. Section 5.2 - Per-MPID Analysis  
 - **Table 2:** Top 15 MPIDs with actual firm names
-  - Top 3: WBPX (Wedbush), WCHV (Wolverine), JPMS (JP Morgan) - all ~135-141ms median
+  - Top 3: WBPX (Summit Securities Group), WCHV (Wolverine), JPMS (JP Morgan) - all ~135-141ms median
   - Slow firms: IMCC, UBSS, GSCO - all ~4,430-4,460ms median
   - 32× variation documented
 - **Interpretation:** Speed hierarchy, infrastructure differences, HFT vs traditional strategies

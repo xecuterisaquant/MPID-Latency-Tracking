@@ -21,12 +21,12 @@ def categorize_firm_by_type(mpid):
     if mpid in ['JPMS', 'GSCO', 'UBSS']:
         return 'Investment Banks'
     
-    # Wealth Managers / Retail Brokers
-    elif mpid in ['WBPX', 'WBSI']:
+    # Wealth Managers / Retail Brokers (WBSI = Wedbush Securities)
+    elif mpid in ['WBSI']:
         return 'Wealth Managers'
-    
-    # Pure HFT / Market Makers
-    elif mpid in ['WCHV', 'VIRT', 'CDRG', 'IMCC', 'SGAS']:
+
+    # Pure HFT / Market Makers (WBPX = Summit Securities Group, a prop market maker)
+    elif mpid in ['WCHV', 'WBPX', 'VIRT', 'CDRG', 'IMCC', 'SGAS']:
         return 'HFT / Market Makers'
     
     # Trading Firms
@@ -86,7 +86,7 @@ def generate_figure_02(df: pd.DataFrame, output_dir: Path = FIGURES_DIR) -> None
     # Add summary statistics annotation
     stats_text = "Top 3 Firms:\n"
     stats_text += "• JPMS (Investment Bank)\n"
-    stats_text += "• WBPX (Wealth Manager)\n"
+    stats_text += "• WBPX (HFT Market Maker)\n"
     stats_text += "• WCHV (HFT Market Maker)\n\n"
     for category in category_order:
         cat_data = plot_df[plot_df['firm_category'] == category]['latency_ms']

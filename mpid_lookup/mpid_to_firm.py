@@ -54,8 +54,11 @@ MPID_TO_FIRM = {
     'FBCO': 'Credit Suisse',
     'BARC': 'Barclays',
     
-    # Wedbush
-    'WBPX': 'Wedbush Securities',
+    # Summit Securities Group (WBPX). NB: Wedbush's own MPIDs are WBSI/WEDP/WPRM.
+    'WBPX': 'Summit Securities Group',
+    'WBSI': 'Wedbush Securities',
+    'WEDP': 'Wedbush Securities',
+    'WPRM': 'Wedbush Securities',
     
     # Electronic Market Makers
     'ETMM': 'Electronic Trading & MM',
@@ -106,9 +109,9 @@ def get_firm_category(firm: str) -> str:
     # Dominant, ultra-fast market makers (14-17ms, 90%+ of activity)
     # These are the ACTUAL liquidity providers on these symbols
     active_fast_mm = {
-        'Wolverine Trading',      # 16.6ms median, 35% of all activity
-        'Wedbush Securities',     # 15.1ms median, 30% of all activity
-        'JP Morgan Securities',   # 14.3ms median, 27% of all activity
+        'Wolverine Trading',         # 16.6ms median, 35% of all activity
+        'Summit Securities Group',   # 15.1ms median, 30% of all activity (MPID: WBPX)
+        'JP Morgan Securities',      # 14.3ms median, 27% of all activity
     }
     
     # Sporadic/slow participants (3-6 seconds, <5% activity)

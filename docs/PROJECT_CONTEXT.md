@@ -62,7 +62,7 @@
 **Market Participants:**
 - **52 unique MPIDs** tracked
 - **Top 3 firms account for 95.7% of activity:**
-  - WBPX (Wedbush): 33,376,802 obs (35.9%)
+  - WBPX (Summit Securities Group): 33,376,802 obs (35.9%)
   - WCHV (Wolverine): 32,138,992 obs (34.5%)
   - JPMS (JP Morgan): 24,726,515 obs (26.6%)
 
@@ -471,7 +471,7 @@ python fig09.py  # Contract comparison
 ### Top MPIDs (52 total)
 | MPID | Firm | Category | Observations | % |
 |------|------|----------|--------------|---|
-| WBPX | Wedbush Securities | Market Maker | 33,376,802 | 35.9% |
+| WBPX | Summit Securities Group | Market Maker | 33,376,802 | 35.9% |
 | WCHV | Wolverine Trading | Market Maker | 32,138,992 | 34.5% |
 | JPMS | JP Morgan Securities | Market Maker | 24,726,515 | 26.6% |
 | JPMX | JP Morgan Execution | Market Maker | 1,440,918 | 1.5% |

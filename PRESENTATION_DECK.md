@@ -44,7 +44,7 @@ We measured actual reaction times at nanosecond precision across 12 trading days
 - **MPID = Market Participant Identifier**
 - 4-letter code identifying trading firms on NASDAQ
 - Examples: 
-  - **WBPX** = Wedbush Securities
+  - **WBPX** = Summit Securities Group
   - **JPMS** = JP Morgan Securities  
   - **WCHV** = Wolverine Trading
 - Voluntarily disclosed (not all orders have MPIDs)
@@ -53,7 +53,7 @@ We measured actual reaction times at nanosecond precision across 12 trading days
 **Speaker Notes (45 sec):**
 "MPID stands for Market Participant Identifier - think of it as a license plate for trading firms. Every MPID-attributed order sent to NASDAQ has a 4-letter code identifying who sent it.
 
-For example, WBPX is Wedbush Securities, JPMS is JP Morgan, WCHV is Wolverine Trading.
+For example, WBPX is Summit Securities Group, JPMS is JP Morgan, WCHV is Wolverine Trading.
 
 Important caveat: MPIDs are voluntarily disclosed, so not all firms use them. This creates selection bias - we're only seeing firms that choose to identify themselves, typically market makers and large broker-dealers. Proprietary traders often hide their identities. But this transparency is what makes our analysis possible."
 
@@ -95,7 +95,7 @@ We used Python with Numba JIT compilation - making Python run as fast as C++ - w
 
 | Firm | MPID | Observations | Median Latency | % of Total |
 |------|------|--------------|----------------|------------|
-| Wedbush | WBPX | 33.4M | 140.9 ms | 35.9% |
+| Summit Securities Group | WBPX | 33.4M | 140.9 ms | 35.9% |
 | Wolverine | WCHV | 32.1M | 138.1 ms | 34.5% |
 | JP Morgan | JPMS | 24.7M | 135.7 ms | 26.6% |
 | **Total** | | **90.2M** | **~138 ms** | **97.0%** |
@@ -104,7 +104,7 @@ We used Python with Numba JIT compilation - making Python run as fast as C++ - w
 - Remaining 3%: Sporadic/slow participants (4,450ms median)
 
 **Speaker Notes (60 sec):**
-"Here's the most striking finding: The market for ultra-fast cross-exchange trading is hyper-concentrated. Just three firms - Wedbush, Wolverine, and JP Morgan - account for 97% of all MPID-attributed activity.
+"Here's the most striking finding: The market for ultra-fast cross-exchange trading is hyper-concentrated. Just three firms - Summit Securities Group, Wolverine, and JP Morgan - account for 97% of all MPID-attributed activity.
 
 Out of 88 distinct trading firms we identified, these three process 90 million observations with remarkably consistent 135-141 millisecond latencies.
 
@@ -124,7 +124,7 @@ This concentration shows that speed advantages create winner-take-all dynamics. 
 
 | Category | Median Latency | Representative Firms |
 |----------|----------------|----------------------|
-| **Active Fast Market Makers** | ~138 ms | Wedbush, Wolverine, JP Morgan |
+| **Active Fast Market Makers** | ~138 ms | Summit Securities Group, Wolverine, JP Morgan |
 | **Moderate** | 154-210 ms | ETMM, Citadel, Flow Traders |
 | **Slow/Sporadic** | ~4,450 ms | IMC, UBS, Goldman Sachs |
 
@@ -259,7 +259,7 @@ Finally, academically, we've measured actual latencies at the firm level rather 
 
 **Content:**
 **Research Findings:**
-✅ **Hyper-concentration:** Top 3 firms (Wedbush, Wolverine, JP Morgan) control 97% of MPID-attributed activity
+✅ **Hyper-concentration:** Top 3 firms (Summit Securities Group, Wolverine, JP Morgan) control 97% of MPID-attributed activity
 
 ✅ **Massive speed gaps:** 
    - 32× difference between fast market makers (138ms) and slow participants (4,450ms)

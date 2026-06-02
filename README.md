@@ -14,7 +14,7 @@ This project measures how fast NASDAQ market makers react to CME E-mini S&P 500 
 ### Key Findings (Updated Analysis Period: 3/10-3/21/2025)
 
 **Market Concentration**
-- **97% of MPID-attributed activity** dominated by just 3 firms: Wedbush (WBPX), Wolverine (WCHV), and JP Morgan (JPMS)
+- **97% of MPID-attributed activity** dominated by just 3 firms: Summit Securities Group (WBPX), Wolverine (WCHV), and JP Morgan (JPMS)
 - Top 15 firms account for >99% of observable market-making activity with 93,031,377 total observations
 - Renowned HFT firms (Citadel, Virtu, IMC) show minimal MPID participation with sporadic multi-second latencies
 
@@ -201,7 +201,7 @@ latency_ns | latency_us | latency_ms | hour | day_of_week | date
 
 | Rank | MPID | Firm Name | Observations | Median Latency | % of Total |
 |------|------|-----------|--------------|----------------|------------|
-| 1 | WBPX | Wedbush Securities | 33,395,949 | 140.9 ms | 35.9% |
+| 1 | WBPX | Summit Securities Group | 33,395,949 | 140.9 ms | 35.9% |
 | 2 | WCHV | Wolverine Trading | 32,113,033 | 138.1 ms | 34.5% |
 | 3 | JPMS | JP Morgan Securities | 24,731,419 | 135.7 ms | 26.6% |
 | **Top 3 Total** | | | **90,240,401** | **138.2 ms** | **97.0%** |
@@ -219,7 +219,7 @@ latency_ns | latency_us | latency_ms | hour | day_of_week | date
 
 | Category | Median Latency | Count | % of Total | Typical Firms |
 |----------|----------------|-------|------------|---------------|
-| **Active Fast Market Maker** | 138.2 ms | 90.2M | 97.0% | Wedbush (WBPX), Wolverine (WCHV), JP Morgan (JPMS) |
+| **Active Fast Market Maker** | 138.2 ms | 90.2M | 97.0% | Summit Securities Group (WBPX), Wolverine (WCHV), JP Morgan (JPMS) |
 | **Slow/Sporadic Participants** | 4,450 ms | 2.8M | 3.0% | IMC (IMCC), UBS (UBSS), Goldman (GSCO), Flow Traders, Citadel |
 | **Other** | Various | <1% | <1% | Miscellaneous |
 
@@ -306,7 +306,7 @@ latency_ns | latency_us | latency_ms | hour | day_of_week | date
 
 **Spearman ρ of Latency Co-Movement (Top 12 Firms):**
 - **High positive correlations** (ρ = 0.65-0.85) between Active Fast MMs
-  - Wedbush ↔ Wolverine: ρ = 0.78
+  - Summit ↔ Wolverine: ρ = 0.78
   - Wolverine ↔ JP Morgan: ρ = 0.72
   - Suggests shared infrastructure/data sources
 - **Low correlations** (ρ = 0.1-0.3) with Sporadic/MFT
@@ -674,7 +674,7 @@ pytest tests/test_messages.py -v
 **Concentration Risk:**
 - 97% of MPID-attributed liquidity from 3 firms (WBPX, WCHV, JPMS) creates **systemic vulnerability**
 - Traditional market-making diversity assumptions invalid for HFT era
-- Regulatory stress testing should model "what if Wedbush/Wolverine/JPM exit simultaneously?"
+- Regulatory stress testing should model "what if Summit/Wolverine/JPM exit simultaneously?"
 - With 90M+ observations concentrated in 3 participants, market resilience critically depends on their continued participation
 - Echoes findings from Baron et al. (2019) on HFT concentration, but our data shows even higher centralization
 

@@ -168,7 +168,7 @@ This basket balances **broad ETFs** (QQQ, SPY, IWM) capturing index dynamics wit
 The same aggregation revealed **88 distinct MPIDs** with MPID attribution. Activity is highly concentrated: the **top 3 MPIDs account for 97% of observations** (90.2M out of 93.0M total).
 
 **Top MPIDs retained for latency measurement (share of sample):**
-- `WBPX` (Wedbush) — 33.4M observations (35.9%): Primary wholesale market maker
+- `WBPX` (Summit Securities Group) — 33.4M observations (35.9%): Primary wholesale market maker
 - `JPMS` (JP Morgan) — 24.7M observations (26.6%): Major broker-dealer institutional desk
 - `WCHV` (Wolverine) — 32.1M observations (34.5%): Professional HFT market maker
 - `IMCC` (IMC Chicago) — 525K (0.56%), `UBSS` (UBS) — 480K (0.52%), `ETMM` — 392K (0.42%), `GSCO` (Goldman) — 316K (0.34%), `FLTU` (Flow Traders) — 258K (0.28%), `SGAS` (Susquehanna) — 243K (0.26%), `CDRG` (Citadel) — 135K (0.14%), `XGWD` — 109K (0.12%), `VIRT` (Virtu) — 101K (0.11%), `SSUS`, `WBSI`, `CSTI` — 76-78K each: Additional market makers with varying participation levels and speed profiles.
@@ -383,7 +383,7 @@ The distribution exhibits strong right-skew with median (147ms) substantially be
 
 | MPID | Firm Name | N obs | Median (ms) | Mean (ms) | p10 (ms) | p90 (ms) | Std Dev (ms) |
 |------|-----------|--------|-------------|-----------|----------|----------|--------------|
-| WBPX | Wedbush | 33,395,949 | 140.9 | 574.9 | 11.7 | 1,388.3 | 1,324.6 |
+| WBPX | Summit Securities Group | 33,395,949 | 140.9 | 574.9 | 11.7 | 1,388.3 | 1,324.6 |
 | WCHV | Wolverine | 32,113,033 | 138.1 | 607.5 | 12.2 | 1,425.2 | 1,372.6 |
 | JPMS | JP Morgan | 24,731,419 | 135.7 | 610.0 | 11.6 | 1,441.1 | 1,391.4 |
 | IMCC | IMC Chicago | 524,870 | 4,455.0 | 4,503.9 | 4,081.7 | 5,020.8 | 844.9 |
@@ -403,7 +403,7 @@ The distribution exhibits strong right-skew with median (147ms) substantially be
 *Note: Given the large sample size (N = 90.2M for top 3 MPIDs), Kruskal-Wallis test would yield p < 0.001, confirming statistically significant differences. However, with such large N, economic significance (32× range in median latencies) is more informative than p-values.*
 
 **Interpretation:**  
-We observe stark heterogeneity across market participants. The top three MPIDs by volume—Wedbush (WBPX), Wolverine (WCHV), and JP Morgan (JPMS)—collectively account for 90.2 million observations (~97% of total) with remarkably consistent median latencies around 135-141ms. These firms operate as professional high-frequency market makers with dedicated low-latency infrastructure. In contrast, firms like IMC Chicago (IMCC), UBS (UBSS), and Goldman Sachs (GSCO) exhibit median latencies around 4,430-4,460ms despite substantial trade volumes, suggesting different trading strategies (potentially slower algorithmic execution or manual intervention). The 32× difference between fastest (JPMS: 135.7ms) and slowest (IMCC: 4,455ms) median latencies suggests distinct technological capabilities and business models. The standard deviations are comparable for fast firms (~1,300-1,400ms) but much lower for slow firms (~830-860ms), indicating that slow firms respond consistently slowly rather than occasionally. These findings align with the "speed hierarchy" documented in recent HFT literature, where a small subset of ultra-fast participants dominates liquidity provision.
+We observe stark heterogeneity across market participants. The top three MPIDs by volume—Summit Securities Group (WBPX), Wolverine (WCHV), and JP Morgan (JPMS)—collectively account for 90.2 million observations (~97% of total) with remarkably consistent median latencies around 135-141ms. These firms operate as professional high-frequency market makers with dedicated low-latency infrastructure. In contrast, firms like IMC Chicago (IMCC), UBS (UBSS), and Goldman Sachs (GSCO) exhibit median latencies around 4,430-4,460ms despite substantial trade volumes, suggesting different trading strategies (potentially slower algorithmic execution or manual intervention). The 32× difference between fastest (JPMS: 135.7ms) and slowest (IMCC: 4,455ms) median latencies suggests distinct technological capabilities and business models. The standard deviations are comparable for fast firms (~1,300-1,400ms) but much lower for slow firms (~830-860ms), indicating that slow firms respond consistently slowly rather than occasionally. These findings align with the "speed hierarchy" documented in recent HFT literature, where a small subset of ultra-fast participants dominates liquidity provision.
 
 ---
 
