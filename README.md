@@ -560,8 +560,9 @@ scipy>=1.10.0
 matplotlib>=3.7.0
 seaborn>=0.12.0
 
+polars>=0.20.0  # Fast group-by/aggregation in the analytics layer
+
 # Optional: Faster operations
-# polars>=0.18.0  # Alternative to pandas
 # dask>=2023.5.0  # Distributed processing
 ```
 

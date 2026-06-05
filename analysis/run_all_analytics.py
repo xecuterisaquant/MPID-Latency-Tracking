@@ -5,6 +5,7 @@ Optimized for multi-day, multi-contract analysis
 """
 
 import pandas as pd
+import polars as pl
 import argparse
 from pathlib import Path
 import sys
@@ -46,7 +47,9 @@ def main():
     print(f"📂 Loading data from: {args.data}")
     start_time = datetime.now()
     
-    df = pd.read_parquet(args.data)
+    # Load with Polars (fast, low-memory parquet reader), then hand a pandas
+    # frame to the Seaborn-based figure generators at the plotting boundary.
+    df = pl.read_parquet(args.data).to_pandas()
     print(f"✓ Loaded {len(df):,} latency observations")
     print(f"  Date range: {pd.to_datetime(df['nasdaq_time_ns'], unit='ns').min()} to {pd.to_datetime(df['nasdaq_time_ns'], unit='ns').max()}")
     print(f"  Symbols: {df['symbol'].nunique()} unique")

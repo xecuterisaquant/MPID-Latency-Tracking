@@ -228,7 +228,7 @@ pandas
 numpy
 matplotlib
 seaborn
-polars (optional, not currently used)
+polars (group-by aggregation in the analytics layer: report stats + figure loading)
 numba (JIT compilation for pipeline)
 pyarrow (parquet backend)
 ```
@@ -326,25 +326,34 @@ df_sample['firm_category'] = df_sample['mpid'].map(category_dict)
 
 **Current Status:** User approved sampling, but current sampled file is 20M rows (too large)
 
-### Option 4: Polars Backend (NOT YET TESTED)
-**Strategy:** Use Polars lazy evaluation instead of pandas
+### Option 4: Polars Backend (IMPLEMENTED in the analytics layer)
+**Strategy:** Use Polars for parquet loading and group-by aggregation instead of pandas
 
 **Approach:**
 ```python
 import polars as pl
-df = pl.scan_parquet('...').lazy()  # Lazy loading
-# Polars operations are optimized for large datasets
+# Stats layer: LAZY scan -> projection pushdown reads only needed columns
+scan = pl.scan_parquet('...')
+scan.group_by('mpid').agg(pl.col('latency_ms').median()).collect()  # PROJECT 2/N cols
+# Figure layer: eager load, convert at the Seaborn boundary
+df = pl.read_parquet('...').to_pandas()
 ```
 
-**Pros:**
-- Better memory efficiency than pandas
-- Lazy evaluation prevents loading full dataset
-- Faster operations
+**Where it's used:**
+- `scripts/extract_report_stats.py` — every report table (overall, per-MPID, hour,
+  symbol, event-type, firm category, contract, top firms) is a **lazy** Polars query
+  (`scan_parquet`), so each table only reads the columns it needs off disk
+- `analysis/run_all_analytics.py` — eagerly loads the latencies parquet with Polars,
+  then hands a pandas frame to the Seaborn figure generators
 
-**Cons:**
-- Need to rewrite figure scripts
-- Learning curve for Polars syntax
-- Not tested on this project
+**Pros:**
+- Lazy projection pushdown avoids materializing the full ~93M-row frame in the stats layer
+- Faster, Arrow-backed multithreaded group-by/aggregation vs pandas
+- Quantile interpolation set to 'linear' so results match the original numbers exactly
+
+**Note:** Seaborn requires pandas, so the figure path stays eager and converts with
+`.to_pandas()` at the plotting step (the documented turbo-mode pattern). Lazy
+evaluation applies to the report-stats layer, not figure rendering.
 
 ---
 

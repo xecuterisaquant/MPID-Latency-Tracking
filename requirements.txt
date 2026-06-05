@@ -8,6 +8,7 @@ pyarrow>=12.0.0
 
 # Performance optimization
 numba>=0.57.0  # JIT compilation - VALIDATED: 48 sec for 12M row matching!
+polars>=0.20.0  # Fast group-by/aggregation in the analytics layer (report stats + figure loading)
 
 # Statistical analysis
 scipy>=1.10.0
@@ -16,10 +17,8 @@ scipy>=1.10.0
 matplotlib>=3.7.0
 seaborn>=0.12.0
 
-# OPTIONAL: 10-100x speedup on groupby/filter operations
-# Uncomment if analytics are too slow on 144M rows (see POLARS_TURBO_MODE.md)
-# polars>=0.20.0
-# dask>=2023.5.0  # Distributed processing for very large datasets
+# OPTIONAL: distributed processing for very large datasets
+# dask>=2023.5.0
 
 # Testing
 pytest>=7.3.0
